@@ -1,0 +1,17 @@
+{
+  "name": "@travel-aid/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/generated/index.ts"
+  },
+  "scripts": {
+    "generate": "uv run --project ../../apps/api export-openapi openapi.json && openapi-ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "travel-aid",
+  "private": true,
+  "packageManager": "pnpm@11.1.3",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @travel-aid/web dev",
+    "dev:api": "cd apps/api && uv run fastapi dev",
+    "build": "pnpm --filter @travel-aid/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "generate:api-client": "pnpm --filter @travel-aid/api-client generate"
+  }
+}
