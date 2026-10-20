@@ -13,4 +13,5 @@ uv run mypy src tests    # type check
 ```
 
 Modules under `src/travel_aid/` follow the [Architecture](https://github.com/Marcos-Coca/travel-aid/wiki/Architecture)
-page. All public routes live under `/api`.
+page. All public routes live under `/api`. On Vercel the app is loaded through `asgi.py` (see
+[Deployment](../../README.md#deployment-vercel) in the root README).
