@@ -29,6 +29,8 @@
   --color-ring: var(--ring);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-positive: var(--positive);
+  --color-positive-foreground: var(--positive-foreground);
   /* Postcard palette: Caribbean sea, sun, hibiscus and a deep night ink. */
   --color-sea: var(--sea);
   --color-sea-deep: var(--sea-deep);
@@ -66,6 +68,8 @@
   --ring: #00727a;
   --warning: #fff2d1;
   --warning-foreground: #8a5100;
+  --positive: #ddf3e6;
+  --positive-foreground: #17734a;
   --sea: #00a6a6;
   --sea-deep: #00727a;
   --lagoon: #7fe0d6;
@@ -97,6 +101,8 @@
     --ring: #7fe0d6;
     --warning: #3a2c0e;
     --warning-foreground: #ffc861;
+    --positive: #12301f;
+    --positive-foreground: #6fd3a0;
     --sea: #008489;
     --sea-deep: #005259;
     --lagoon: #2a9e95;
