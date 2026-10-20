@@ -127,37 +127,34 @@ function LuggageTag({ tag, trip, updateTrip }: { tag: Tag } & Pick<EditorProps, 
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        {/* The button carries the tilt, shadow and focus ring; the inner span is clipped to the tag shape. */}
-        <button
-          type="button"
+      {/* The trigger button carries the tilt, shadow and focus ring; the inner span is clipped to the tag shape. */}
+      <PopoverTrigger
+        className={cn(
+          "group min-w-0 shrink-0 grow rounded-lg text-left drop-shadow-[0_10px_12px_rgb(0_0_0/0.28)] transition-transform outline-none hover:-translate-y-0.5 hover:rotate-0 focus-visible:rotate-0 focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white data-popup-open:rotate-0 motion-reduce:transition-none",
+          tag.hang,
+        )}
+      >
+        <span
           className={cn(
-            "group min-w-0 shrink-0 grow rounded-lg text-left drop-shadow-[0_10px_12px_rgb(0_0_0/0.28)] transition-transform outline-none hover:-translate-y-0.5 hover:rotate-0 focus-visible:rotate-0 focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white aria-expanded:rotate-0 motion-reduce:transition-none",
-            tag.hang,
+            "luggage-tag relative grid min-h-22 content-start gap-0.5 py-3 pr-3.5 pl-8",
+            tag.color,
           )}
         >
-          <span
-            className={cn(
-              "luggage-tag relative grid min-h-22 content-start gap-0.5 py-3 pr-3.5 pl-8",
-              tag.color,
-            )}
-          >
-            <span className="font-mono text-[11px] font-bold tracking-[0.14em] uppercase opacity-75">{tag.label}</span>
-            {isMissing ? (
-              <span className="inline-flex items-center gap-1 font-heading text-lg font-extrabold opacity-85">
-                <PlusIcon className="size-4" aria-hidden />
-                Add
+          <span className="font-mono text-[11px] font-bold tracking-[0.14em] uppercase opacity-75">{tag.label}</span>
+          {isMissing ? (
+            <span className="inline-flex items-center gap-1 font-heading text-lg font-extrabold opacity-85">
+              <PlusIcon className="size-4" aria-hidden />
+              Add
+            </span>
+          ) : (
+            <>
+              <span className="truncate font-heading text-lg leading-tight font-extrabold tabular-nums sm:text-xl">
+                {tag.value(trip)}
               </span>
-            ) : (
-              <>
-                <span className="truncate font-heading text-lg leading-tight font-extrabold tabular-nums sm:text-xl">
-                  {tag.value(trip)}
-                </span>
-                <span className="text-[13px] opacity-80">{tag.detail(trip)}</span>
-              </>
-            )}
-          </span>
-        </button>
+              <span className="text-[13px] opacity-80">{tag.detail(trip)}</span>
+            </>
+          )}
+        </span>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80">
         <Editor trip={trip} updateTrip={updateTrip} onDone={() => setOpen(false)} />

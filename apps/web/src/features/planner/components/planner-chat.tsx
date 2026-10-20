@@ -95,13 +95,11 @@ export function PlannerChat({ initialMessages = [] }: { initialMessages?: Messag
           />
           <InputGroupAddon align="block-end" className="justify-between">
             <Tooltip>
-              <TooltipTrigger asChild>
-                {/* Wrapped so the tooltip still opens while the button is disabled. */}
-                <span tabIndex={0}>
-                  <InputGroupButton size="icon-sm" variant="outline" className="rounded-full" disabled aria-label="Speak instead of typing">
-                    <MicIcon />
-                  </InputGroupButton>
-                </span>
+              {/* A span trigger, so the tooltip still opens while the button is disabled. */}
+              <TooltipTrigger render={<span tabIndex={0} />}>
+                <InputGroupButton size="icon-sm" variant="outline" className="rounded-full" disabled aria-label="Speak instead of typing">
+                  <MicIcon />
+                </InputGroupButton>
               </TooltipTrigger>
               <TooltipContent>Voice input is coming soon</TooltipContent>
             </Tooltip>
