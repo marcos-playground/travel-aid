@@ -10,9 +10,14 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { RecommendationPicker } from "@/features/recommendations/components/recommendation-picker";
+import type { RecommendationSet } from "@/features/recommendations/recommendations";
+import { useTrip } from "@/features/trip/trip-provider";
 import { cn } from "@/lib/utils";
 
-type Message = { id: string; role: "user" | "notice"; text: string };
+export type Message =
+  | { id: string; role: "user" | "notice"; text: string }
+  | { id: string; role: "assistant"; text: string; recommendations?: RecommendationSet };
 
 const EXAMPLE =
   "I want to travel from Santo Domingo to Madrid from February 10 to February 15, 2027. My flight-and-hotel budget is USD 2,000, and I need one room.";
@@ -21,8 +26,9 @@ const EXAMPLE =
 const NOT_CONNECTED =
   "The assistant isn't connected yet, so I can't reply. You can still set your trip details above.";
 
-export function PlannerChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function PlannerChat({ initialMessages = [] }: { initialMessages?: Message[] }) {
+  const { trip } = useTrip();
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [draft, setDraft] = useState("");
 
   function send() {
@@ -37,7 +43,7 @@ export function PlannerChat() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 sm:px-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 sm:px-6">
       <div className="flex flex-1 flex-col gap-4 py-8 sm:py-12" aria-live="polite">
         <div className="flex flex-col gap-2">
           <h2 className="font-heading text-2xl font-extrabold tracking-tight">Plan it together</h2>
@@ -47,17 +53,21 @@ export function PlannerChat() {
           </p>
         </div>
         {messages.map((message) => (
-          <p
-            key={message.id}
-            className={cn(
-              "max-w-[48ch] rounded-2xl px-4 py-2.5 whitespace-pre-wrap",
-              message.role === "user"
-                ? "self-end rounded-br-md bg-primary text-primary-foreground"
-                : "self-start rounded-bl-md bg-secondary text-secondary-foreground",
+          <div key={message.id} className="flex flex-col gap-4">
+            <p
+              className={cn(
+                "max-w-[56ch] rounded-2xl px-4 py-2.5 whitespace-pre-wrap",
+                message.role === "user"
+                  ? "self-end rounded-br-md bg-primary text-primary-foreground"
+                  : "self-start rounded-bl-md bg-secondary text-secondary-foreground",
+              )}
+            >
+              {message.text}
+            </p>
+            {message.role === "assistant" && message.recommendations && (
+              <RecommendationPicker set={message.recommendations} budgetUsd={trip.budgetUsd} />
             )}
-          >
-            {message.text}
-          </p>
+          </div>
         ))}
       </div>
 
