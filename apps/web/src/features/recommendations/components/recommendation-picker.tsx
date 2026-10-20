@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { BedDoubleIcon, PlaneIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -295,7 +295,8 @@ function OfferList<T extends FlightOffer | HotelOffer>({
   onValueChange: (value: string) => void;
   items: ListItem<T>[];
 }) {
-  const titleId = `${title.toLowerCase().replace(/\s+/g, "-")}-title`;
+  const id = useId();
+  const titleId = `${id}-title`;
   return (
     <section className="flex min-w-0 flex-col gap-2">
       <h3 id={titleId} className="flex items-center gap-2 font-heading text-lg font-extrabold [&_svg]:size-5">
@@ -307,10 +308,10 @@ function OfferList<T extends FlightOffer | HotelOffer>({
           offer ? (
             <label
               key={offer.id}
-              htmlFor={offer.id}
+              htmlFor={`${id}-${offer.id}`}
               className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-2xl border-2 border-transparent bg-card p-3.5 transition-colors hover:border-border has-data-checked:border-foreground"
             >
-              <RadioGroupItem value={offer.id} id={offer.id} className="mt-1" />
+              <RadioGroupItem value={offer.id} id={`${id}-${offer.id}`} className="mt-1" />
               {render(offer)}
             </label>
           ) : (
