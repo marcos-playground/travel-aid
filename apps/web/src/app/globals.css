@@ -1,26 +1,147 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Dark mode follows the operating system setting; the app has no theme toggle yet. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
+  --font-sans: var(--font-atkinson);
+  --font-heading: var(--font-bricolage);
+  --font-mono: var(--font-overpass-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  /* Postcard palette: Caribbean sea, sun, hibiscus and a deep night ink. */
+  --color-sea: var(--sea);
+  --color-sea-deep: var(--sea-deep);
+  --color-lagoon: var(--lagoon);
+  --color-sunny: var(--sunny);
+  --color-hibiscus: var(--hibiscus);
+  --color-night: var(--night);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #fff8ec;
+  --foreground: #0b2d3a;
+  --card: #ffffff;
+  --card-foreground: #0b2d3a;
+  --popover: #ffffff;
+  --popover-foreground: #0b2d3a;
+  --primary: #0b2d3a;
+  --primary-foreground: #fff8ec;
+  --secondary: #f1e6d1;
+  --secondary-foreground: #0b2d3a;
+  --muted: #f7eedd;
+  --muted-foreground: #4c6670;
+  --accent: #e2f5f2;
+  --accent-foreground: #0b2d3a;
+  --destructive: #b3261e;
+  --border: #e3d6be;
+  --input: #d6c8ad;
+  --ring: #00727a;
+  --warning: #fff2d1;
+  --warning-foreground: #8a5100;
+  --sea: #00a6a6;
+  --sea-deep: #00727a;
+  --lagoon: #7fe0d6;
+  --sunny: #ffd23f;
+  --hibiscus: #d1345b;
+  --night: #0b2d3a;
+  --radius: 0.625rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #08222c;
+    --foreground: #eaf6f4;
+    --card: #0f2f3b;
+    --card-foreground: #eaf6f4;
+    --popover: #0f2f3b;
+    --popover-foreground: #eaf6f4;
+    --primary: #eaf6f4;
+    --primary-foreground: #0b2d3a;
+    --secondary: #123947;
+    --secondary-foreground: #eaf6f4;
+    --muted: #0d2a35;
+    --muted-foreground: #9bb8bf;
+    --accent: #123947;
+    --accent-foreground: #eaf6f4;
+    --destructive: #ff8a80;
+    --border: #1e4a58;
+    --input: #2a5a69;
+    --ring: #7fe0d6;
+    --warning: #3a2c0e;
+    --warning-foreground: #ffc861;
+    --sea: #008489;
+    --sea-deep: #005259;
+    --lagoon: #2a9e95;
+    color-scheme: dark;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer components {
+  /* A luggage tag: notched left end with a punched hole. The shadow lives on the parent,
+     because clip-path would cut it off. */
+  .luggage-tag {
+    clip-path: polygon(16px 0, 100% 0, 100% 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+    border-radius: 6px 14px 14px 6px;
+  }
+  .luggage-tag::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 10px;
+    height: 10px;
+    margin-top: -5px;
+    border-radius: 9999px;
+    background: var(--sea-deep);
+    box-shadow: 0 0 0 3px rgb(0 0 0 / 0.08);
+  }
+
+  /* Circular postmark with a dashed inner ring. */
+  .postmark::before {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    border-radius: 9999px;
+    border: 1.5px dashed rgb(255 255 255 / 0.7);
+  }
 }
