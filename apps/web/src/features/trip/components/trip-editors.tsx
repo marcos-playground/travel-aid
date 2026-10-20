@@ -16,6 +16,7 @@ import {
   toTripDate,
   type Trip,
   type TripErrors,
+  type TripField,
   type TripPatch,
 } from "../trip";
 import type { TripUpdateResult } from "../trip-store";
@@ -26,10 +27,19 @@ export type EditorProps = {
   onDone: () => void;
 };
 
-/** Applies a patch; closes the editor on success and returns the errors otherwise. */
-function useSave({ updateTrip, onDone }: EditorProps) {
+/** Rejects stale drafts, then applies a patch and closes the editor on success. */
+function useSave({ trip, updateTrip, onDone }: EditorProps) {
+  const [initialTrip] = useState(trip);
   const [errors, setErrors] = useState<TripErrors>({});
   function save(patch: TripPatch) {
+    const conflicts = (Object.keys(patch) as TripField[]).filter((field) => trip[field] !== initialTrip[field]);
+    if (conflicts.length > 0) {
+      setErrors(Object.fromEntries(conflicts.map((field) => [
+        field,
+        "This detail changed while you were editing. Close and reopen this editor to use the latest value.",
+      ])));
+      return;
+    }
     const result = updateTrip(patch);
     if (result.ok) {
       setErrors({});

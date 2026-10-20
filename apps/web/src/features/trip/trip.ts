@@ -53,7 +53,7 @@ export const TRIP_FIELDS: Record<TripField, { label: string; description: string
   },
   returnDate: {
     label: "Return",
-    description: "Return flight date and hotel check-out date, as YYYY-MM-DD. After the departure date.",
+    description: "Return flight date and hotel check-out date, as YYYY-MM-DD. Today or later, and after the departure date.",
   },
   travelers: {
     label: "Travelers",
@@ -110,6 +110,9 @@ export function validateTrip(
     trip.origin.trim().toLowerCase() === trip.destination.trim().toLowerCase()
   ) {
     errors.destination = "Choose a destination different from where you're leaving.";
+    if (changed.includes("origin") && !errors.origin) {
+      errors.origin = "Choose an origin different from your destination.";
+    }
   }
 
   const departure = trip.departureDate === null ? null : parseTripDate(trip.departureDate);
@@ -118,6 +121,9 @@ export function validateTrip(
   if (trip.returnDate !== null && !ret) errors.returnDate = "Use a real date in YYYY-MM-DD form.";
   if (departure && changed.includes("departureDate") && differenceInCalendarDays(departure, today) < 0) {
     errors.departureDate = "Choose today or a later date.";
+  }
+  if (ret && changed.includes("returnDate") && differenceInCalendarDays(ret, today) < 0) {
+    errors.returnDate = "Choose today or a later date.";
   }
   if (departure && ret && differenceInCalendarDays(ret, departure) < 1) {
     errors.returnDate = "Choose a return date after the departure date.";
