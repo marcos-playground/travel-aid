@@ -308,7 +308,7 @@ function OfferList<T extends FlightOffer | HotelOffer>({
             <label
               key={offer.id}
               htmlFor={offer.id}
-              className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-2xl border-2 border-transparent bg-card p-3.5 transition-colors hover:border-border has-[[data-state=checked]]:border-foreground"
+              className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-2xl border-2 border-transparent bg-card p-3.5 transition-colors hover:border-border has-data-checked:border-foreground"
             >
               <RadioGroupItem value={offer.id} id={offer.id} className="mt-1" />
               {render(offer)}
@@ -382,12 +382,11 @@ function HotelDetails({ hotel }: { hotel: HotelOffer }) {
 function SaveTripButton() {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span tabIndex={0} className="self-start">
-          <Button type="button" disabled className="rounded-full bg-hibiscus px-5 font-heading font-extrabold text-white">
-            Save trip
-          </Button>
-        </span>
+      {/* A span trigger, so the tooltip still opens while the button is disabled. */}
+      <TooltipTrigger render={<span tabIndex={0} className="self-start" />}>
+        <Button type="button" disabled className="rounded-full bg-hibiscus px-5 font-heading font-extrabold text-white">
+          Save trip
+        </Button>
       </TooltipTrigger>
       <TooltipContent>Saving trips needs an account, which is coming soon</TooltipContent>
     </Tooltip>
