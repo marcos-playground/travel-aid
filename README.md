@@ -4,8 +4,8 @@ Plan a vacation through a natural conversation and compare flights and hotels wi
 
 Product requirements and architecture decisions live in the wiki:
 
-- [MVP Requirements](https://github.com/Marcos-Coca/travel-aid/wiki/MVP)
-- [Architecture](https://github.com/Marcos-Coca/travel-aid/wiki/Architecture)
+- [MVP Requirements](https://github.com/marcos-playground/travel-aid/wiki/MVP)
+- [Architecture](https://github.com/marcos-playground/travel-aid/wiki/Architecture)
 
 ## Repository layout
 
