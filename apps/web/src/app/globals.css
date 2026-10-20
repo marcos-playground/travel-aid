@@ -7,7 +7,7 @@
 
 @theme inline {
   --font-sans: var(--font-atkinson);
-  --font-heading: var(--font-overpass);
+  --font-heading: var(--font-bricolage);
   --font-mono: var(--font-overpass-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -27,11 +27,15 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Wayfinding yellow for the main call to action. */
-  --color-sign: var(--sign);
-  --color-sign-foreground: var(--sign-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  /* Postcard palette: Caribbean sea, sun, hibiscus and a deep night ink. */
+  --color-sea: var(--sea);
+  --color-sea-deep: var(--sea-deep);
+  --color-lagoon: var(--lagoon);
+  --color-sunny: var(--sunny);
+  --color-hibiscus: var(--hibiscus);
+  --color-night: var(--night);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -42,53 +46,60 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #13212c;
+  --background: #fff8ec;
+  --foreground: #0b2d3a;
   --card: #ffffff;
-  --card-foreground: #13212c;
+  --card-foreground: #0b2d3a;
   --popover: #ffffff;
-  --popover-foreground: #13212c;
-  --primary: #13212c;
-  --primary-foreground: #f6f8fa;
-  --secondary: #e7edf2;
-  --secondary-foreground: #13212c;
-  --muted: #f1f4f7;
-  --muted-foreground: #55677a;
-  --accent: #e7edf2;
-  --accent-foreground: #13212c;
+  --popover-foreground: #0b2d3a;
+  --primary: #0b2d3a;
+  --primary-foreground: #fff8ec;
+  --secondary: #f1e6d1;
+  --secondary-foreground: #0b2d3a;
+  --muted: #f7eedd;
+  --muted-foreground: #4c6670;
+  --accent: #e2f5f2;
+  --accent-foreground: #0b2d3a;
   --destructive: #b3261e;
-  --border: #d5dde4;
-  --input: #d5dde4;
-  --ring: #1d5da6;
-  --sign: #f5b800;
-  --sign-foreground: #13212c;
+  --border: #e3d6be;
+  --input: #d6c8ad;
+  --ring: #00727a;
   --warning: #fff2d1;
   --warning-foreground: #8a5100;
+  --sea: #00a6a6;
+  --sea-deep: #00727a;
+  --lagoon: #7fe0d6;
+  --sunny: #ffd23f;
+  --hibiscus: #d1345b;
+  --night: #0b2d3a;
   --radius: 0.625rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0c1318;
-    --foreground: #e6ecf1;
-    --card: #142029;
-    --card-foreground: #e6ecf1;
-    --popover: #142029;
-    --popover-foreground: #e6ecf1;
-    --primary: #e6ecf1;
-    --primary-foreground: #13212c;
-    --secondary: #1a2833;
-    --secondary-foreground: #e6ecf1;
-    --muted: #111b22;
-    --muted-foreground: #93a5b5;
-    --accent: #1a2833;
-    --accent-foreground: #e6ecf1;
+    --background: #08222c;
+    --foreground: #eaf6f4;
+    --card: #0f2f3b;
+    --card-foreground: #eaf6f4;
+    --popover: #0f2f3b;
+    --popover-foreground: #eaf6f4;
+    --primary: #eaf6f4;
+    --primary-foreground: #0b2d3a;
+    --secondary: #123947;
+    --secondary-foreground: #eaf6f4;
+    --muted: #0d2a35;
+    --muted-foreground: #9bb8bf;
+    --accent: #123947;
+    --accent-foreground: #eaf6f4;
     --destructive: #ff8a80;
-    --border: #26394a;
-    --input: #26394a;
-    --ring: #82b6f2;
+    --border: #1e4a58;
+    --input: #2a5a69;
+    --ring: #7fe0d6;
     --warning: #3a2c0e;
     --warning-foreground: #ffc861;
+    --sea: #008489;
+    --sea-deep: #005259;
+    --lagoon: #2a9e95;
     color-scheme: dark;
   }
 }
@@ -102,5 +113,35 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  /* A luggage tag: notched left end with a punched hole. The shadow lives on the parent,
+     because clip-path would cut it off. */
+  .luggage-tag {
+    clip-path: polygon(16px 0, 100% 0, 100% 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+    border-radius: 6px 14px 14px 6px;
+  }
+  .luggage-tag::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 10px;
+    height: 10px;
+    margin-top: -5px;
+    border-radius: 9999px;
+    background: var(--sea-deep);
+    box-shadow: 0 0 0 3px rgb(0 0 0 / 0.08);
+  }
+
+  /* Circular postmark with a dashed inner ring. */
+  .postmark::before {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    border-radius: 9999px;
+    border: 1.5px dashed rgb(255 255 255 / 0.7);
   }
 }

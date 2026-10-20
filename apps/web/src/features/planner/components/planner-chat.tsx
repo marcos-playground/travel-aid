@@ -40,22 +40,20 @@ export function PlannerChat() {
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 sm:px-6">
       <div className="flex flex-1 flex-col gap-4 py-8 sm:py-12" aria-live="polite">
         <div className="flex flex-col gap-2">
-          <h1 className="font-heading text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">
-            Hi! Where are you headed?
-          </h1>
+          <h2 className="font-heading text-2xl font-extrabold tracking-tight">Plan it together</h2>
           <p className="max-w-prose text-muted-foreground">
             Tell me where you&apos;re leaving from, where you want to go, your dates, how many people are traveling, and
-            your budget for flights and the hotel. You can also fill in the trip details above yourself.
+            your budget for flights and the hotel. I&apos;ll ask about anything missing.
           </p>
         </div>
         {messages.map((message) => (
           <p
             key={message.id}
             className={cn(
-              "max-w-[48ch] rounded-xl px-3.5 py-2.5 whitespace-pre-wrap",
+              "max-w-[48ch] rounded-2xl px-4 py-2.5 whitespace-pre-wrap",
               message.role === "user"
-                ? "self-end rounded-br-sm bg-primary text-primary-foreground"
-                : "self-start rounded-bl-sm bg-secondary text-secondary-foreground",
+                ? "self-end rounded-br-md bg-primary text-primary-foreground"
+                : "self-start rounded-bl-md bg-secondary text-secondary-foreground",
             )}
           >
             {message.text}
@@ -70,7 +68,7 @@ export function PlannerChat() {
           send();
         }}
       >
-        <InputGroup className="rounded-xl border-2 border-foreground/80 has-[[data-slot=input-group-control]:focus-visible]:border-ring">
+        <InputGroup className="rounded-2xl border-2 border-foreground/85 bg-card has-[[data-slot=input-group-control]:focus-visible]:border-ring dark:bg-card">
           <InputGroupTextarea
             id="planner-message"
             aria-label="Message"
@@ -100,7 +98,7 @@ export function PlannerChat() {
             <Button
               type="submit"
               size="sm"
-              className="bg-sign font-heading font-extrabold text-sign-foreground hover:bg-sign/85"
+              className="rounded-full bg-hibiscus px-4 font-heading font-extrabold text-white hover:bg-hibiscus/85"
               disabled={!draft.trim()}
             >
               Send
@@ -111,7 +109,7 @@ export function PlannerChat() {
         <Button
           type="button"
           variant="link"
-          className="h-auto self-start p-0 text-left whitespace-normal"
+          className="h-auto self-start p-0 text-left whitespace-normal text-sea-deep dark:text-lagoon"
           onClick={() => setDraft(EXAMPLE)}
         >
           Try an example: Santo Domingo → Madrid, Feb 10–15, $2,000

@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Atkinson_Hyperlegible, Overpass, Overpass_Mono } from "next/font/google";
+import { Atkinson_Hyperlegible, Bricolage_Grotesque, Overpass_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-// Atkinson Hyperlegible for reading, Overpass (a highway-signage face) for headings,
-// and Overpass Mono for airport codes and figures.
+// Atkinson Hyperlegible for reading, Bricolage Grotesque for postcard-style headings,
+// and Overpass Mono for labels and figures.
 const atkinson = Atkinson_Hyperlegible({
   variable: "--font-atkinson",
   weight: ["400", "700"],
   subsets: ["latin"],
 });
 
-const overpass = Overpass({
-  variable: "--font-overpass",
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin"],
 });
 
@@ -30,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${atkinson.variable} ${overpass.variable} ${overpassMono.variable} h-full antialiased`}
+      className={`${atkinson.variable} ${bricolage.variable} ${overpassMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <TooltipProvider>{children}</TooltipProvider>
