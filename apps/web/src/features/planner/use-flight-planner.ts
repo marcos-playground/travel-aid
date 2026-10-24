@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PlanningEvent, Session } from "@travel-aid/api-client";
-import type { TripPatch } from "@/features/trip/trip";
 import { useTripStore } from "@/features/trip/trip-provider";
 import { readPlanningStream } from "./stream";
+import { createPlanningEdits } from "./planning-edits";
 import { startAnalytics, track, trackError } from "@/lib/analytics";
 
 type Operations = {
@@ -31,8 +31,7 @@ export function useFlightPlanner() {
   useEffect(() => {
     let disposed = false;
     let current: Session | null = null;
-    let pending: TripPatch = {};
-    let submitted: TripPatch = {};
+    const edits = createPlanningEdits();
     let running = false;
     let activeTurn: string | undefined;
     let viewedTurn: string | undefined;
@@ -48,8 +47,8 @@ export function useFlightPlanner() {
       setSession(next);
       // Server hydration must not be mistaken for a manual edit. Edits made during
       // an in-flight turn stay visible and are sent next, rather than overwritten.
-      store.replace({ ...next.trip, ...submitted, ...pending });
-      setDirty(Object.keys(pending).length > 0 || Object.keys(submitted).length > 0);
+      store.replace({ ...next.trip, ...edits.snapshot() });
+      setDirty(edits.isDirty());
     }
 
     async function restore() {
@@ -67,7 +66,7 @@ export function useFlightPlanner() {
 
     function scheduleEdits() {
       clearTimeout(timer);
-      if (!disposed && !running && current && Object.keys(pending).length) {
+      if (!disposed && !running && current && edits.hasPending()) {
         timer = setTimeout(() => { void turn(""); }, 350);
       }
     }
@@ -77,14 +76,13 @@ export function useFlightPlanner() {
       running = true;
       setBusy(true);
       setError(null);
-      const patch = pending;
-      pending = {};
-      submitted = patch;
+      const patch = edits.submit();
       controller = new AbortController();
       const requestId = crypto.randomUUID();
       activeTurn = requestId;
       let completed = false;
       let failed = false;
+      let accepted = false;
       try {
         const snapshot = current ?? await restore();
         track(retry ? "planner_retry_requested" : source === "more_options" ? "planner_more_options_requested" : text.trim() ? "planner_message_submitted" : "planner_details_edited", {
@@ -101,7 +99,13 @@ export function useFlightPlanner() {
         await readPlanningStream(response.body, (value) => {
           if (!value || typeof value !== "object" || !("type" in value) || !("session" in value)) return;
           const event = value as PlanningEvent;
-          if (event.type === "trip.updated" || event.type === "turn.completed") submitted = {};
+          if (event.type === "trip.updated") {
+            accepted = true;
+            edits.accept();
+          }
+          // A terminal snapshot is not an acknowledgement of submitted edits.
+          // Recover only edits that have not received trip.updated, then await an explicit retry.
+          if (event.type === "turn.failed" || event.type === "turn.completed") edits.recover();
           apply(event.session);
           if (event.type === "flights.ready" && viewedTurn !== requestId) {
             viewedTurn = requestId;
@@ -117,8 +121,7 @@ export function useFlightPlanner() {
         if (!completed) throw new Error("The connection ended. Your accepted details are saved; try again.");
         return !failed;
       } catch (cause) {
-        pending = { ...patch, ...pending };
-        submitted = {};
+        edits.recover();
         if (!disposed) {
           if (controller.signal.aborted) {
             if (current) apply({ ...current, status: "interrupted" });
@@ -136,13 +139,13 @@ export function useFlightPlanner() {
         controller = null;
         if (!disposed) {
           setBusy(false);
-          if (completed && !failed) scheduleEdits();
+          if (completed && !failed && accepted) scheduleEdits();
         }
       }
     }
 
     const unsubscribe = store.subscribeEdits((patch) => {
-      pending = { ...pending, ...patch };
+      edits.queue(patch);
       setDirty(true);
       scheduleEdits();
     });

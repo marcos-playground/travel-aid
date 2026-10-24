@@ -1,6 +1,6 @@
 "use client";
 
-import type { Journey, Session } from "@travel-aid/api-client";
+import type { Journey, Offer, Session } from "@travel-aid/api-client";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/features/recommendations/format";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,15 @@ function Direction({ journey, label }: { journey: Journey; label: string }) {
   );
 }
 
+function BookingDetails({ offer }: { offer: Offer }) {
+  return (
+    <div className="space-y-2">
+      <a className="block text-sm underline underline-offset-4" href={offer.bookingUrl} target="_blank" rel="noopener noreferrer">Check current price on Google Flights ↗</a>
+      <p className="text-xs text-muted-foreground">Checked {new Date(offer.retrievedAt).toLocaleString("en-US")}. Baggage and fare rules are confirmed by the seller.</p>
+    </div>
+  );
+}
+
 export function FlightResults({ session, disabled, onSelect }: {
   session: Session; disabled: boolean; onSelect: (id: string) => void;
 }) {
@@ -66,8 +75,7 @@ export function FlightResults({ session, disabled, onSelect }: {
               <Button className="w-full" variant={selected ? "secondary" : "default"} disabled={disabled} aria-pressed={selected} onClick={() => onSelect(offer.id)}>
                 {selected ? "Selected · Saved in this browser" : "Choose this flight"}
               </Button>
-              <a className="block text-sm underline underline-offset-4" href={offer.bookingUrl} target="_blank" rel="noopener noreferrer">Check current price on Google Flights ↗</a>
-              <p className="text-xs text-muted-foreground">Checked {new Date(offer.retrievedAt).toLocaleString("en-US")}. Baggage and fare rules are confirmed by the seller.</p>
+              <BookingDetails offer={offer} />
             </article>
           );
         })}
@@ -77,12 +85,14 @@ export function FlightResults({ session, disabled, onSelect }: {
           <summary className="cursor-pointer font-bold">Compare more available flights</summary>
           <ul className="mt-4 divide-y">
             {session.offers.filter((offer) => !session.recommendations.some((r) => r.offerId === offer.id)).map((offer) => (
-              <li key={offer.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
-                <div>
+              <li key={offer.id} className="flex flex-wrap items-start justify-between gap-4 py-4 text-sm">
+                <div className="space-y-3">
                   <p className="font-bold">{formatUsd(offer.totalUsd)} · {cabinLabel(offer.cabin)}</p>
-                  <p>Outbound {localTime(offer.outbound.legs[0].departsAt)} · {formatDuration(offer.outbound.durationMinutes)}</p>
-                  <p>Return {localTime(offer.inbound.legs[0].departsAt)} · {formatDuration(offer.inbound.durationMinutes)}</p>
+                  <p className="text-muted-foreground">Round trip · Total for {offer.travelers} adult{offer.travelers === 1 ? "" : "s"}</p>
+                  <Direction journey={offer.outbound} label="Outbound" />
+                  <Direction journey={offer.inbound} label="Return" />
                   {session.trip.flightBudgetUsd && offer.totalUsd > session.trip.flightBudgetUsd ? <p>{formatUsd(offer.totalUsd - session.trip.flightBudgetUsd)} over flight budget (+{((offer.totalUsd / session.trip.flightBudgetUsd - 1) * 100).toFixed(1)}%)</p> : null}
+                  <BookingDetails offer={offer} />
                 </div>
                 <Button size="sm" variant="outline" disabled={disabled} aria-pressed={session.selectedOfferId === offer.id} onClick={() => onSelect(offer.id)}>{session.selectedOfferId === offer.id ? "Selected · Saved" : "Choose flight"}</Button>
               </li>

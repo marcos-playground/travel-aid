@@ -76,6 +76,10 @@ const TAGS: Tag[] = [
   },
 ];
 
+function FlightBudgetEditor(props: EditorProps) {
+  return <BudgetEditor {...props} field="flightBudgetUsd" />;
+}
+
 /**
  * The trip summary pinned above the conversation, as a row of luggage tags. The assistant
  * fills them in as you chat, and each tag opens an editor so you can set or correct it yourself.
@@ -87,7 +91,7 @@ export function TripTags({ flightsOnly = false }: { flightsOnly?: boolean }) {
     value: (trip) => trip.flightBudgetUsd !== null && formatUsd(trip.flightBudgetUsd),
     detail: () => "Optional · All adults",
     missing: (trip) => trip.flightBudgetUsd === null,
-    Editor: (props) => <BudgetEditor {...props} field="flightBudgetUsd" />,
+    Editor: FlightBudgetEditor,
   } : tag.key === "travelers" ? { ...tag, label: "Adults", value: (trip) => `${trip.travelers} adult${trip.travelers === 1 ? "" : "s"}`, detail: () => "Adults only" } : tag) : TAGS;
   const missing = tags.filter((tag) => tag.missing(trip) && (!flightsOnly || tag.key !== "budget"));
   const ready = missingFields(trip).length === 0;
