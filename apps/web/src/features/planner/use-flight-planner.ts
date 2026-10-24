@@ -5,9 +5,10 @@ import type { PlanningEvent, Session } from "@travel-aid/api-client";
 import type { TripPatch } from "@/features/trip/trip";
 import { useTripStore } from "@/features/trip/trip-provider";
 import { readPlanningStream } from "./stream";
+import { startAnalytics, track, trackError } from "@/lib/analytics";
 
 type Operations = {
-  send: (text: string) => Promise<boolean>;
+  send: (text: string, source?: "chat" | "more_options") => Promise<boolean>;
   retry: () => void;
   stop: () => void;
   select: (id: string) => Promise<void>;
@@ -33,6 +34,9 @@ export function useFlightPlanner() {
     let pending: TripPatch = {};
     let submitted: TripPatch = {};
     let running = false;
+    let activeTurn: string | undefined;
+    let viewedTurn: string | undefined;
+    let openedSession: string | undefined;
     let controller: AbortController | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const boot = new AbortController();
@@ -40,6 +44,7 @@ export function useFlightPlanner() {
     function apply(next: Session) {
       if (disposed || (current && next.revision < current.revision)) return;
       current = next;
+      startAnalytics(next.analyticsId);
       setSession(next);
       // Server hydration must not be mistaken for a manual edit. Edits made during
       // an in-flight turn stay visible and are sent next, rather than overwritten.
@@ -53,6 +58,10 @@ export function useFlightPlanner() {
       }));
       const next: Session = await response.json();
       apply(next);
+      if (openedSession !== next.analyticsId) {
+        openedSession = next.analyticsId;
+        track("planner_opened", { revision: next.revision });
+      }
       return next;
     }
 
@@ -63,7 +72,7 @@ export function useFlightPlanner() {
       }
     }
 
-    async function turn(text: string, retry = false): Promise<boolean> {
+    async function turn(text: string, retry = false, source: "chat" | "more_options" = "chat"): Promise<boolean> {
       if (disposed || running) return false;
       running = true;
       setBusy(true);
@@ -72,14 +81,19 @@ export function useFlightPlanner() {
       pending = {};
       submitted = patch;
       controller = new AbortController();
+      const requestId = crypto.randomUUID();
+      activeTurn = requestId;
       let completed = false;
       let failed = false;
       try {
         const snapshot = current ?? await restore();
+        track(retry ? "planner_retry_requested" : source === "more_options" ? "planner_more_options_requested" : text.trim() ? "planner_message_submitted" : "planner_details_edited", {
+          turn_id: requestId, $ai_trace_id: requestId, edited_fields: Object.keys(patch),
+        });
         const response = await requireResponse(await fetch("/api/planning/messages", {
           method: "POST", headers: { "Content-Type": "application/json" },
           signal: controller.signal,
-          body: JSON.stringify({ text, patch, retry, requestId: crypto.randomUUID(),
+          body: JSON.stringify({ text, patch, retry, requestId,
             expectedRevision: snapshot.revision,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }),
         }));
@@ -89,6 +103,11 @@ export function useFlightPlanner() {
           const event = value as PlanningEvent;
           if (event.type === "trip.updated" || event.type === "turn.completed") submitted = {};
           apply(event.session);
+          if (event.type === "flights.ready" && viewedTurn !== requestId) {
+            viewedTurn = requestId;
+            track("planner_results_viewed", { turn_id: requestId, $ai_trace_id: requestId,
+              offer_count: event.session.offers.length, category_count: event.session.recommendations.length });
+          }
           if (event.type === "turn.failed") {
             failed = true;
             if (!disposed) setError(event.message ?? "Please try again.");
@@ -104,6 +123,7 @@ export function useFlightPlanner() {
           if (controller.signal.aborted) {
             if (current) apply({ ...current, status: "interrupted" });
           } else {
+            trackError("turn_request_failed", "turn", requestId);
             setError(cause instanceof Error ? cause.message : "Couldn't connect. Please try again.");
             // Refresh the revision after a conflict without automatically repeating paid work.
             await restore().catch(() => {});
@@ -112,6 +132,7 @@ export function useFlightPlanner() {
         return false;
       } finally {
         running = false;
+        activeTurn = undefined;
         controller = null;
         if (!disposed) {
           setBusy(false);
@@ -126,9 +147,12 @@ export function useFlightPlanner() {
       scheduleEdits();
     });
     operations.current = {
-      send: (text) => turn(text),
+      send: (text, source) => turn(text, false, source),
       retry: () => { void turn("", true); },
-      stop: () => controller?.abort(),
+      stop: () => {
+        if (activeTurn) track("planner_stop_requested", { turn_id: activeTurn, $ai_trace_id: activeTurn });
+        controller?.abort();
+      },
       select: async (id) => {
         if (!current || running) return;
         setError(null);
@@ -139,21 +163,26 @@ export function useFlightPlanner() {
           }));
           apply(await response.json());
         } catch (cause) {
+          trackError("selection_request_failed", "selection");
           if (!disposed) setError(cause instanceof Error ? cause.message : "Couldn't save your choice.");
           await restore().catch(() => {});
         }
       },
     };
     void restore().then(scheduleEdits).catch((cause) => {
+      if (!boot.signal.aborted) trackError("session_request_failed", "restore");
       if (!disposed) setError(cause instanceof Error ? cause.message : "Couldn't recover your plan.");
     });
-    const stopOnLeave = () => controller?.abort();
+    const stopOnLeave = () => {
+      if (activeTurn) track("planner_left_during_turn", { turn_id: activeTurn, $ai_trace_id: activeTurn }, true);
+      controller?.abort();
+    };
     window.addEventListener("pagehide", stopOnLeave);
     return () => {
       disposed = true;
       clearTimeout(timer);
       boot.abort();
-      controller?.abort();
+      stopOnLeave();
       unsubscribe();
       window.removeEventListener("pagehide", stopOnLeave);
       operations.current = null;
@@ -161,7 +190,7 @@ export function useFlightPlanner() {
   }, [store]);
 
   return { session, busy, error, dirty,
-    send: (text: string) => operations.current?.send(text) ?? Promise.resolve(false),
+    send: (text: string, source?: "chat" | "more_options") => operations.current?.send(text, source) ?? Promise.resolve(false),
     retry: () => operations.current?.retry(),
     stop: () => operations.current?.stop(),
     select: (id: string) => operations.current?.select(id),

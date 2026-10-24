@@ -162,7 +162,7 @@ function LiveFlightChat() {
         {session?.status === "interrupted" && !planner.busy && <p className="text-sm text-muted-foreground">Your last search stopped. Your trip and completed results are saved.</p>}
         {session && !planner.dirty && <FlightResults session={session} disabled={planner.busy} onSelect={(id) => { void planner.select(id); }} />}
         <div className="flex gap-2">
-          {!planner.busy && session && session.offers.length > 0 && !planner.dirty && <Button variant="outline" size="sm" onClick={() => { void planner.send("Show me more flight options."); }}>More options</Button>}
+          {!planner.busy && session && session.offers.length > 0 && !planner.dirty && <Button variant="outline" size="sm" onClick={() => { void planner.send("Show me more flight options.", "more_options"); }}>More options</Button>}
           {planner.busy ? <Button variant="outline" size="sm" onClick={planner.stop}>Stop search</Button> :
             (planner.error || session?.status === "interrupted" || session?.status === "error" || session?.offers.length) ? <Button variant="outline" size="sm" onClick={planner.retry}>{session?.offers.length ? "Refresh flights" : "Try again"}</Button> : null}
         </div>
