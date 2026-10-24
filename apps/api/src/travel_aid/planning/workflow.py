@@ -166,7 +166,7 @@ async def run_turn(
                 ).total_seconds()
                 < settings.flight_cache_seconds
             )
-            more = state["interpretation"].moreOptions and cached
+            more = state["interpretation"].moreOptions
             trace.event(
                 "planning_cache_checked",
                 cache_hit=cached,
@@ -181,7 +181,10 @@ async def run_turn(
             if more:
                 session.searchDepth = min(10, session.searchDepth + 2)
                 session.searchedCabins = []
-            elif command.retry or state["interpretation"].searchRequested or not cached:
+            # Expanding the search is independent of whether old prices can be reused.
+            if not cached or (
+                not more and (command.retry or state["interpretation"].searchRequested)
+            ):
                 session.offers = []
                 session.recommendations = []
                 session.selectedOfferId = None

@@ -1,7 +1,7 @@
 import asyncio
 import json
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -264,6 +264,64 @@ def test_workflow_clarifies_without_search_and_preserves_unmentioned_fields(
     asyncio.run(run_turn(session, command, threading.Event(), noop, noop))
     assert session.trip.origin == "SDQ" and session.trip.travelers == 2
     assert "destination" in session.messages[-1].text
+
+
+@pytest.mark.parametrize("fresh", [True, False])
+def test_more_options_expands_depth_even_after_cache_expires(
+    monkeypatch: pytest.MonkeyPatch,
+    fresh: bool,
+) -> None:
+    session = Session(trip=trip())
+    calls: list[tuple[str, int]] = []
+
+    def search(*args: Any) -> list[Offer]:
+        calls.append((args[3], args[6]))
+        return [offer(f"depth-{args[6]}", 700)]
+
+    async def noop(value: Any) -> None:
+        pass
+
+    async def more(*args: Any) -> Interpretation:
+        return Interpretation(
+            changes=[],
+            preferences=[],
+            clarification=None,
+            unsupportedTravelers=False,
+            searchRequested=True,
+            moreOptions=True,
+        )
+
+    monkeypatch.setattr("travel_aid.planning.workflow.search_cabin", search)
+    asyncio.run(
+        run_turn(
+            session,
+            TurnRequest(requestId=uuid4(), expectedRevision=0, retry=True),
+            threading.Event(),
+            noop,
+            noop,
+        )
+    )
+    session.selectedOfferId = "depth-3"
+    if not fresh:
+        session.searchUpdatedAt = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    monkeypatch.setattr("travel_aid.planning.workflow.interpret", more)
+    asyncio.run(
+        run_turn(
+            session,
+            TurnRequest(requestId=uuid4(), expectedRevision=0, text="More options"),
+            threading.Event(),
+            noop,
+            noop,
+        )
+    )
+    assert calls == [("economy", 3), ("economy", 5)]
+    assert session.searchDepth == 5
+    if fresh:
+        assert {o.id for o in session.offers} == {"depth-3", "depth-5"}
+        assert session.selectedOfferId == "depth-3"
+    else:
+        assert [o.id for o in session.offers] == ["depth-5"]
+        assert session.selectedOfferId is None
 
 
 class MemoryRepository:
