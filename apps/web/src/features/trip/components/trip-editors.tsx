@@ -133,7 +133,7 @@ export function DatesEditor(props: EditorProps) {
           {error ? (
             <FieldError>{error}</FieldError>
           ) : (
-            <FieldDescription>Pick the day you fly out, then the day you fly back. Hotel dates match.</FieldDescription>
+            <FieldDescription>Pick the day you fly out, then the day you fly back.</FieldDescription>
           )}
         </Field>
         <EditorActions
@@ -162,7 +162,7 @@ export function TravelersEditor(props: EditorProps) {
     >
       <FieldGroup className="gap-4">
         <Field data-invalid={Boolean(errors.travelers)}>
-          <FieldLabel id="trip-travelers-label">Travelers</FieldLabel>
+          <FieldLabel id="trip-travelers-label">Adults</FieldLabel>
           <div className="flex items-center gap-3" role="group" aria-labelledby="trip-travelers-label">
             <Button
               type="button"
@@ -191,7 +191,7 @@ export function TravelersEditor(props: EditorProps) {
           {errors.travelers ? (
             <FieldError>{errors.travelers}</FieldError>
           ) : (
-            <FieldDescription>Everyone shares one hotel room.</FieldDescription>
+            <FieldDescription>Flights for 1–9 adults. Children and infants aren&apos;t supported yet.</FieldDescription>
           )}
         </Field>
         <EditorActions canClear={trip.travelers !== null} onClear={() => save({ travelers: null })} />
@@ -200,22 +200,22 @@ export function TravelersEditor(props: EditorProps) {
   );
 }
 
-export function BudgetEditor(props: EditorProps) {
-  const { trip } = props;
+export function BudgetEditor(props: EditorProps & { field?: "budgetUsd" | "flightBudgetUsd" }) {
+  const { trip, field = "budgetUsd" } = props;
   const { errors, save } = useSave(props);
-  const [value, setValue] = useState(trip.budgetUsd === null ? "" : String(trip.budgetUsd));
+  const [value, setValue] = useState(trip[field] === null ? "" : String(trip[field]));
 
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
         const amount = Number(value.replace(/[,\s$]/g, ""));
-        save({ budgetUsd: value.trim() === "" ? null : amount });
+        save({ [field]: value.trim() === "" ? null : amount });
       }}
     >
       <FieldGroup className="gap-4">
-        <Field data-invalid={Boolean(errors.budgetUsd)}>
-          <FieldLabel htmlFor="trip-budget">Budget for flights and hotel</FieldLabel>
+        <Field data-invalid={Boolean(errors[field])}>
+          <FieldLabel htmlFor="trip-budget">{field === "flightBudgetUsd" ? "Flight budget" : "Budget for flights and hotel"}</FieldLabel>
           <InputGroup>
             <InputGroupAddon>
               <InputGroupText>$</InputGroupText>
@@ -227,20 +227,20 @@ export function BudgetEditor(props: EditorProps) {
               inputMode="decimal"
               placeholder="2,000"
               autoComplete="off"
-              aria-invalid={Boolean(errors.budgetUsd)}
+              aria-invalid={Boolean(errors[field])}
               autoFocus
             />
             <InputGroupAddon align="inline-end">
               <InputGroupText>USD</InputGroupText>
             </InputGroupAddon>
           </InputGroup>
-          {errors.budgetUsd ? (
-            <FieldError>{errors.budgetUsd}</FieldError>
+          {errors[field] ? (
+            <FieldError>{errors[field]}</FieldError>
           ) : (
-            <FieldDescription>{TRIP_FIELDS.budgetUsd.description}</FieldDescription>
+            <FieldDescription>{TRIP_FIELDS[field].description}</FieldDescription>
           )}
         </Field>
-        <EditorActions canClear={trip.budgetUsd !== null} onClear={() => save({ budgetUsd: null })} />
+        <EditorActions canClear={trip[field] !== null} onClear={() => save({ [field]: null })} />
       </FieldGroup>
     </form>
   );
