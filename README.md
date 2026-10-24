@@ -14,6 +14,8 @@ through an application-owned adapter. A LangGraph workflow uses OpenAI `gpt-6-lu
 chat messages, validates trip details, searches flights, and streams results to the homepage.
 Anonymous plans and selections persist in PostgreSQL (Neon through Vercel). Hotel integration
 follows the flight flow. See [flight planning](docs/flight-planning.md) for contracts and policy.
+PostHog links product events, AI traces and errors per anonymous plan. See
+[observability](docs/observability.md) for development setup, privacy controls and dashboards.
 
 ## Repository layout
 
@@ -70,7 +72,7 @@ pnpm lint                  # lint the web app
 pnpm typecheck             # type-check TypeScript packages
 pnpm build                 # production build of the web app
 pnpm generate:api-client   # regenerate the TypeScript client after backend API changes
-pnpm --filter @travel-aid/web test  # stream decoder tests (Node 24)
+pnpm --filter @travel-aid/web test  # stream decoder and analytics privacy tests (Node 24)
 ```
 
 Backend checks run from `apps/api` (see its [README](apps/api/README.md)).

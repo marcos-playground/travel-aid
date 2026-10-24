@@ -39,4 +39,5 @@ the migration with `DATABASE_URL_UNPOOLED` before serving planning requests.
 PostgreSQL locking and recovery locally, supply **a dedicated test database** as
 `TEST_DATABASE_URL`. That integration test skips when unset; CI runs it with a PostgreSQL
 service. It never reads the runtime `DATABASE_URL` for tests. Live OpenAI/Neon verification is
-still required after credentials are configured.
+available separately from automated tests. See [observability](../../docs/observability.md)
+for the PostHog configuration, event contract and live synthetic verification notes.
