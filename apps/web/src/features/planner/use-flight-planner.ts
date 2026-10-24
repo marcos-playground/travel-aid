@@ -66,7 +66,7 @@ export function useFlightPlanner() {
 
     function scheduleEdits() {
       clearTimeout(timer);
-      if (!disposed && !running && current && edits.hasPending()) {
+      if (!disposed && !running && current && edits.hasNewEdits()) {
         timer = setTimeout(() => { void turn(""); }, 350);
       }
     }
@@ -82,7 +82,6 @@ export function useFlightPlanner() {
       activeTurn = requestId;
       let completed = false;
       let failed = false;
-      let accepted = false;
       try {
         const snapshot = current ?? await restore();
         track(retry ? "planner_retry_requested" : source === "more_options" ? "planner_more_options_requested" : text.trim() ? "planner_message_submitted" : "planner_details_edited", {
@@ -99,12 +98,9 @@ export function useFlightPlanner() {
         await readPlanningStream(response.body, (value) => {
           if (!value || typeof value !== "object" || !("type" in value) || !("session" in value)) return;
           const event = value as PlanningEvent;
-          if (event.type === "trip.updated") {
-            accepted = true;
-            edits.accept();
-          }
+          if (event.type === "trip.updated") edits.accept();
           // A terminal snapshot is not an acknowledgement of submitted edits.
-          // Recover only edits that have not received trip.updated, then await an explicit retry.
+          // Recover only edits that have not received trip.updated; they go with the next turn.
           if (event.type === "turn.failed" || event.type === "turn.completed") edits.recover();
           apply(event.session);
           if (event.type === "flights.ready" && viewedTurn !== requestId) {
@@ -139,7 +135,7 @@ export function useFlightPlanner() {
         controller = null;
         if (!disposed) {
           setBusy(false);
-          if (completed && !failed && accepted) scheduleEdits();
+          if (completed && !failed) scheduleEdits();
         }
       }
     }

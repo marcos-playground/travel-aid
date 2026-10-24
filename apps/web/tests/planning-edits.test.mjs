@@ -24,6 +24,26 @@ test("newer edits win over an older failed submission, including clearing a fiel
   assert.deepEqual(edits.submit(), { destination: "MAD", flightBudgetUsd: null });
 });
 
+test("an edit made during a rejected turn still sends on its own", () => {
+  const edits = createPlanningEdits();
+  edits.queue({ destination: "JFK" });
+  edits.submit();
+  edits.queue({ flightBudgetUsd: 900 }); // edited while the turn runs
+  edits.recover(); // turn.completed without trip.updated
+  assert.equal(edits.hasNewEdits(), true);
+  assert.deepEqual(edits.submit(), { destination: "JFK", flightBudgetUsd: 900 });
+  assert.equal(edits.hasNewEdits(), false);
+});
+
+test("a recovered edit alone waits for the next turn instead of resending", () => {
+  const edits = createPlanningEdits();
+  edits.queue({ flightBudgetUsd: 900 });
+  edits.submit();
+  edits.recover(); // turn.completed without trip.updated
+  assert.equal(edits.hasNewEdits(), false);
+  assert.equal(edits.isDirty(), true);
+});
+
 test("accepted edits are not replayed after a later stream/provider failure", () => {
   const edits = createPlanningEdits();
   edits.queue({ origin: "SDQ", flightBudgetUsd: 900 });

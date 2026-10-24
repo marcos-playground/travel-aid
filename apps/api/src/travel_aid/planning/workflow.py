@@ -166,7 +166,8 @@ async def run_turn(
                 ).total_seconds()
                 < settings.flight_cache_seconds
             )
-            more = state["interpretation"].moreOptions
+            # Only expand a search that already ran for this route; a new search key clears it.
+            more = state["interpretation"].moreOptions and session.searchUpdatedAt is not None
             trace.event(
                 "planning_cache_checked",
                 cache_hit=cached,

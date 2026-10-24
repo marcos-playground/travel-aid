@@ -4,14 +4,18 @@ import type { TripPatch } from "../trip/trip";
 export function createPlanningEdits() {
   let pending: TripPatch = {};
   let submitted: TripPatch = {};
+  // Recovered edits wait for the next turn; only edits made since the last submit send on their own.
+  let edited = false;
   return {
     queue(patch: TripPatch) {
       pending = { ...pending, ...patch };
+      edited = true;
     },
     submit() {
       const patch = pending;
       pending = {};
       submitted = patch;
+      edited = false;
       return patch;
     },
     accept() {
@@ -22,7 +26,7 @@ export function createPlanningEdits() {
       submitted = {};
     },
     snapshot: (): TripPatch => ({ ...submitted, ...pending }),
-    hasPending: () => Object.keys(pending).length > 0,
+    hasNewEdits: () => edited,
     isDirty: () => Object.keys(pending).length > 0 || Object.keys(submitted).length > 0,
   };
 }

@@ -25,6 +25,7 @@ from travel_aid.planning.models import (
     Preferences,
     Session,
     Trip,
+    TripChange,
     TurnRequest,
 )
 from travel_aid.planning.validation import resolve_airport, search_details
@@ -322,6 +323,57 @@ def test_more_options_expands_depth_even_after_cache_expires(
     else:
         assert [o.id for o in session.offers] == ["depth-5"]
         assert session.selectedOfferId is None
+
+
+@pytest.mark.parametrize("route_change", [False, True])
+def test_more_options_does_not_expand_a_new_search(
+    monkeypatch: pytest.MonkeyPatch,
+    route_change: bool,
+) -> None:
+    session = Session(trip=trip())
+    calls: list[tuple[str, int]] = []
+
+    def search(*args: Any) -> list[Offer]:
+        calls.append((args[3], args[6]))
+        return [offer(f"depth-{args[6]}", 700)]
+
+    async def noop(value: Any) -> None:
+        pass
+
+    async def more(*args: Any) -> Interpretation:
+        return Interpretation(
+            changes=[TripChange(field="departureDate", value="2099-02-11")] if route_change else [],
+            preferences=[],
+            clarification=None,
+            unsupportedTravelers=False,
+            searchRequested=True,
+            moreOptions=True,
+        )
+
+    monkeypatch.setattr("travel_aid.planning.workflow.search_cabin", search)
+    monkeypatch.setattr("travel_aid.planning.workflow.interpret", more)
+    if route_change:
+        asyncio.run(
+            run_turn(
+                session,
+                TurnRequest(requestId=uuid4(), expectedRevision=0, retry=True),
+                threading.Event(),
+                noop,
+                noop,
+            )
+        )
+        calls.clear()
+    asyncio.run(
+        run_turn(
+            session,
+            TurnRequest(requestId=uuid4(), expectedRevision=0, text="More options"),
+            threading.Event(),
+            noop,
+            noop,
+        )
+    )
+    assert calls == [("economy", 3)]
+    assert session.searchDepth == 3
 
 
 class MemoryRepository:
