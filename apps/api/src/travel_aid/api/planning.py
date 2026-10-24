@@ -5,15 +5,18 @@ import contextlib
 import logging
 import secrets
 import threading
+import time
 from collections.abc import AsyncIterator
 from typing import Annotated
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from travel_aid.infrastructure.sessions import SessionConflict, SessionRepository
+from travel_aid.observability import JourneyTrace, capture, flush, trace_context
 from travel_aid.planning.models import (
     PlanningEvent,
     SelectionRequest,
@@ -81,14 +84,21 @@ async def restore(request: Request, response: Response, repo: Repo) -> Session:
     token = request.cookies.get(COOKIE, "")
     try:
         session = await repo.get(token) if 32 <= len(token) <= 128 else None
+        created = session is None
         if session is None:
             token = secrets.token_urlsafe(32)
             session = await repo.create(token)
     except psycopg.Error as error:
+        JourneyTrace(uuid4(), uuid4()).error("session_storage_failed", error)
+        await flush()
         raise HTTPException(
             503, "Planning is temporarily unavailable. Please try again."
         ) from error
     renew_cookie(response, request, token)
+    capture(
+        "planning_session_created" if created else "planning_session_recovered", session.analyticsId
+    )
+    await flush()
     return session
 
 
@@ -101,6 +111,23 @@ async def select(
         token = token_from(request)
         session = await repo.select(token, command.expectedRevision, command.offerId)
         renew_cookie(response, request, token)
+        offer = next(o for o in session.offers if o.id == command.offerId)
+        category = next(
+            (r.category for r in session.recommendations if r.offerId == command.offerId), None
+        )
+        capture(
+            "flight_selected",
+            session.analyticsId,
+            category=category,
+            cabin=offer.cabin,
+            over_budget=bool(
+                session.trip.flightBudgetUsd and offer.totalUsd > session.trip.flightBudgetUsd
+            ),
+            revision=session.revision,
+            turn_id=session.lastRequestId,
+            **{"$ai_trace_id": session.lastRequestId},
+        )
+        await flush()
         return session
     except SessionConflict as error:
         raise HTTPException(
@@ -109,6 +136,8 @@ async def select(
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     except psycopg.Error as error:
+        JourneyTrace(uuid4(), uuid4()).error("selection_storage_failed", error)
+        await flush()
         raise HTTPException(503, "Couldn't save that choice. Please try again.") from error
 
 
@@ -128,15 +157,20 @@ async def messages(command: TurnRequest, request: Request, repo: Repo) -> Stream
     try:
         session = await repo.claim(token, command.expectedRevision, str(command.requestId))
     except SessionConflict as error:
+        capture("planning_error", uuid4(), error_code="revision_conflict", stage="turn_claim")
+        await flush()
         raise HTTPException(
             409, "Your plan changed or is busy. Reload it and try again."
         ) from error
     except psycopg.Error as error:
+        JourneyTrace(uuid4(), command.requestId).error("turn_storage_failed", error)
+        await flush()
         raise HTTPException(
             503, "Planning is temporarily unavailable. Please try again."
         ) from error
     stop = threading.Event()
     queue: asyncio.Queue[PlanningEvent | None] = asyncio.Queue()
+    trace = JourneyTrace(session.analyticsId, command.requestId)
 
     async def emit(event: PlanningEvent) -> None:
         await queue.put(event)
@@ -145,14 +179,23 @@ async def messages(command: TurnRequest, request: Request, repo: Repo) -> Stream
         await repo.save(token, current)
 
     async def execute() -> None:
+        started = time.monotonic()
+        trace.event(
+            "planning_turn_started",
+            revision=session.revision,
+            input_kind="chat" if command.text.strip() else "retry" if command.retry else "edit",
+            edited_fields=list(command.patch),
+        )
         try:
-            await run_turn(session, command, stop, emit, persist)
+            with trace_context(trace):
+                await run_turn(session, command, stop, emit, persist)
         except asyncio.CancelledError:
             session.status = "interrupted"
             raise
-        except Exception:
+        except Exception as error:
             logger.exception("Planning turn failed")
             session.status = "error"
+            trace.error("planning_turn_failed", error)
             await emit(
                 PlanningEvent(
                     type="turn.failed",
@@ -166,9 +209,18 @@ async def messages(command: TurnRequest, request: Request, repo: Repo) -> Stream
             # Release on disconnect too; already accepted details/finished cabin results survive.
             try:
                 await asyncio.shield(asyncio.wait_for(repo.save(token, session, release=True), 5))
-            except (Exception, asyncio.CancelledError):
+            except (Exception, asyncio.CancelledError) as error:
                 logger.warning("Session cleanup deferred to lease expiry")
+                trace.error("session_cleanup_failed", error)
+            trace.event(
+                "planning_turn_failed" if session.status == "error" else "planning_turn_completed",
+                outcome=session.status,
+                duration_ms=round((time.monotonic() - started) * 1000),
+                offer_count=len(session.offers),
+                category_count=len(session.recommendations),
+            )
             await emit(PlanningEvent(type="turn.completed", session=session.model_copy(deep=True)))
+            await flush()
             await queue.put(None)
 
     async def stream() -> AsyncIterator[str]:

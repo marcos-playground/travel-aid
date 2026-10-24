@@ -51,8 +51,10 @@ class SessionRepository:
             row = await (
                 await connection.execute(
                     "UPDATE planning_sessions SET expires_at=%s, "
-                    "state=CASE WHEN run_id IS NOT NULL AND lease_until < now() "
+                    "state=jsonb_set(CASE WHEN run_id IS NOT NULL AND lease_until < now() "
                     "THEN jsonb_set(state, '{status}', '\"interrupted\"') ELSE state END, "
+                    "'{analyticsId}', COALESCE(state->'analyticsId', "
+                    "to_jsonb(gen_random_uuid()::text))), "
                     "run_id=CASE WHEN lease_until < now() THEN NULL ELSE run_id END, "
                     "lease_until=CASE WHEN lease_until < now() THEN NULL ELSE lease_until END "
                     "WHERE token_hash=%s AND expires_at > now() RETURNING state",

@@ -14,6 +14,7 @@ from fli.search import SearchFlights
 from fli.search._concurrency import TokenBucketRateLimiter
 from fli.search.client import Client
 
+from travel_aid.observability import current_trace
 from travel_aid.planning.models import Cabin, Journey, Leg, Offer, Preferences, Trip
 
 _limiter = TokenBucketRateLimiter(calls=3, period=1.0)
@@ -30,6 +31,8 @@ class CancellableClient:
         self.client = Client()
         self.stop = stop
         self.deadline = deadline
+        self.request_count = 0
+        self._count_lock = threading.Lock()
 
     def check(self) -> None:
         if self.stop.is_set() or time.monotonic() >= self.deadline:
@@ -41,6 +44,8 @@ class CancellableClient:
             self.check()
         self.check()
         kwargs["timeout"] = min(10.0, max(0.1, self.deadline - time.monotonic()))
+        with self._count_lock:
+            self.request_count += 1
         response = self.client._session().get(url, **kwargs)
         self.check()
         response.raise_for_status()
@@ -167,4 +172,13 @@ def search_cabin(
         offer = normalize_pair(pair, trip, codes, link, now)
         if offer:
             offers.append(offer)
+    trace = current_trace()
+    if trace:
+        trace.event(
+            "flight_provider_results",
+            cabin=cabin,
+            request_count=client.request_count,
+            offer_count=len(offers),
+            filtered_count=len(results or []) - len(offers),
+        )
     return offers

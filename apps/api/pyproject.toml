@@ -13,6 +13,7 @@ dependencies = [
     "flights",
     "langchain-openai>=1.7.2",
     "langgraph>=1.2.16",
+    "posthog>=7.75.11",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.0",
 ]

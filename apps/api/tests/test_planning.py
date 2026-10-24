@@ -12,6 +12,7 @@ from fli.models.google_flights.base import FlightLeg, FlightResult, SeatType
 from pydantic import ValidationError
 from starlette.types import Message
 
+from travel_aid import observability as obs
 from travel_aid.api.planning import repository
 from travel_aid.infrastructure.sessions import SessionConflict
 from travel_aid.main import create_app
@@ -308,6 +309,7 @@ def test_http_cookie_recovery_sse_and_version_conflict() -> None:
         response = client.post("/api/planning/session")
         assert response.status_code == 200 and "HttpOnly" in response.headers["set-cookie"]
         assert "no-store" in response.headers["cache-control"]
+        initial_analytics_id = response.json()["analyticsId"]
         body = {"requestId": str(uuid4()), "expectedRevision": 0, "patch": {"origin": "SDQ"}}
         response = client.post("/api/planning/messages", json=body)
         assert response.status_code == 200
@@ -315,6 +317,7 @@ def test_http_cookie_recovery_sse_and_version_conflict() -> None:
         assert "event: trip.updated" in response.text and "event: turn.completed" in response.text
         assert client.post("/api/planning/messages", json=body).status_code == 409
         recovered = client.post("/api/planning/session").json()
+        assert recovered["analyticsId"] == initial_analytics_id
         assert recovered["trip"]["origin"] == "SDQ" and recovered["revision"] == 1
         assert (
             client.post(
@@ -398,3 +401,41 @@ def test_asgi_disconnect_releases_lease_and_persists_accepted_state(
         assert repo.sessions[token].trip.origin == "SDQ"
 
     asyncio.run(scenario())
+
+
+def test_observability_explains_cabin_decisions_without_fares_or_trip_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captures: list[dict[str, Any]] = []
+
+    class RecordingClient:
+        def capture(self, event: str, **kwargs: Any) -> None:
+            filtered = obs.before_send({"event": event, **kwargs})
+            if filtered:
+                captures.append(filtered)
+
+    monkeypatch.setattr(obs, "client", lambda: RecordingClient())
+    # Model callbacks have their own usage/privacy test; this turn uses explicit form edits.
+    monkeypatch.setattr(obs.JourneyTrace, "callbacks", lambda self, **kwargs: [])
+    monkeypatch.setattr(
+        "travel_aid.planning.workflow.search_cabin", lambda *args: [offer("e", 700)]
+    )
+    session = Session(trip=trip())
+    command = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"travelers": 2})
+
+    async def noop(value: Any) -> None:
+        pass
+
+    with obs.trace_context(obs.JourneyTrace(session.analyticsId, command.requestId)):
+        asyncio.run(run_turn(session, command, threading.Event(), noop, noop))
+    skipped = [e["properties"] for e in captures if e["event"] == "flight_cabin_skipped"]
+    assert {(e["cabin"], e["reason"]) for e in skipped} == {
+        ("premium_economy", "budget_headroom"),
+        ("business", "budget_headroom"),
+    }
+    assert all(e["turn_id"] == str(command.requestId) for e in skipped)
+    ranked = [e["properties"] for e in captures if e["event"] == "flight_results_ranked"]
+    assert ranked and all(e["ranking_score"] == 1 for e in ranked)
+    raw = json.dumps(captures)
+    assert "SDQ" not in raw and "JFK" not in raw and "2099" not in raw
+    assert "totalUsd" not in raw and "flightBudgetUsd" not in raw

@@ -204,6 +204,10 @@ export type SelectionRequest = {
  */
 export type Session = {
     /**
+     * Analyticsid
+     */
+    analyticsId: string;
+    /**
      * Revision
      */
     revision: number;

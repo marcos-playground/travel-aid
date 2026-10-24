@@ -2,12 +2,14 @@
 
 from datetime import datetime
 
+from travel_aid.observability import current_trace
 from travel_aid.planning.models import Cabin, Offer, Preferences, Recommendation
 
 COMFORT = {"unknown": 0, "mixed": 0.5, "economy": 1, "premium_economy": 2, "business": 3}
 # Exploration heuristics, not predicted fares: only expand when the target has headroom
 # relative to observed economy quotes. A user can explicitly request a cabin at any budget.
 CABIN_HEADROOM: dict[Cabin, float] = {"economy": 1, "premium_economy": 1.4, "business": 2.5}
+POLICY_VERSION = "flight-ranking-v1"
 
 
 def should_search(
@@ -101,4 +103,21 @@ def rank(
                 overBudgetPercent=round(difference / budget * 100, 1) if budget else 0,
             )
         )
+        trace = current_trace()
+        if trace:
+            trace.event(
+                "flight_results_ranked",
+                policy_version=POLICY_VERSION,
+                category=category,
+                cabin=best.cabin,
+                # Budget ranking uses dollars internally; emit a relative score only.
+                ranking_score=round(
+                    score(best) / baseline if category == "budget" else score(best), 3
+                ),
+                duration_minutes=sum(d.durationMinutes for d in (best.outbound, best.inbound)),
+                stops=sum(len(d.legs) - 1 for d in (best.outbound, best.inbound)),
+                relative_price=round(best.totalUsd / baseline, 3),
+                over_budget_ratio=round(difference / budget, 3) if budget else 0,
+                earliest_hour_rule=5 if category == "mid-range" else None,
+            )
     return chosen

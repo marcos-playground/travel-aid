@@ -26,7 +26,18 @@ def test_postgres_claim_persistence_expiry_and_stale_writer() -> None:
                 ).read_text()
             )
         try:
-            await repo.create(token)
+            initial = await repo.create(token)
+            recovered = await repo.get(token)
+            assert recovered and recovered.analyticsId == initial.analyticsId
+            # Old saved plans receive one stable public ID, without replacing their auth key.
+            async with await repo.connect() as connection:
+                await connection.execute(
+                    "UPDATE planning_sessions SET state=state-'analyticsId' WHERE token_hash=%s",
+                    (repo.key(token),),
+                )
+            legacy = await repo.get(token)
+            recovered = await repo.get(token)
+            assert legacy and recovered and recovered.analyticsId == legacy.analyticsId
             claims = await asyncio.gather(
                 repo.claim(token, 0, "first"), repo.claim(token, 0, "other"), return_exceptions=True
             )

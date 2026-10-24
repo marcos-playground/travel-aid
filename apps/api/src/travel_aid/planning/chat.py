@@ -32,6 +32,7 @@ user wants additional alternatives to existing results. For direct questions abo
 flight options, respond briefly in clarification using only supplied data. Never promise a
 booking or say that a price is confirmed. Changes may reference the recent clarification.
 """
+PROMPT_VERSION = "flight-extraction-v1"
 
 
 async def interpret(session: Session, text: str, local_time: datetime) -> Interpretation:

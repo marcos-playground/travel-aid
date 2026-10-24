@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
@@ -121,6 +121,8 @@ class ChatMessage(Contract):
 
 
 class Session(Contract):
+    # Public correlation only. It is unrelated to the secret session cookie/hash.
+    analyticsId: UUID = Field(default_factory=uuid4)
     revision: int = 0
     trip: Trip = Field(default_factory=Trip)
     preferences: Preferences = Field(default_factory=Preferences)

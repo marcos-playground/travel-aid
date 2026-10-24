@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     flight_search_timeout_seconds: float = Field(default=75, gt=0, le=90)
     flight_cache_seconds: int = Field(default=900, ge=0, le=86400)
     web_origin: str = "http://localhost:3000"
+    posthog_enabled: bool = False
+    posthog_project_key: str = ""
+    posthog_host: str = ""
+    posthog_capture_debug_content: bool = False
 
 
 @lru_cache

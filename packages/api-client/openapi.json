@@ -459,6 +459,11 @@
       },
       "Session": {
         "properties": {
+          "analyticsId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analyticsid"
+          },
           "revision": {
             "type": "integer",
             "title": "Revision",
@@ -575,6 +580,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "analyticsId",
           "revision",
           "trip",
           "preferences",
