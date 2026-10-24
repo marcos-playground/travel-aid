@@ -36,7 +36,7 @@ export function PlannerPage({ initialTrip, initialMessages }: { initialTrip?: Tr
       </div>
       {/* The tags stay pinned while the conversation scrolls underneath. */}
       <div className="sticky top-0 z-10 bg-[linear-gradient(180deg,var(--sea)_0%,var(--lagoon)_100%)] shadow-[0_8px_20px_-14px_rgb(0_0_0/0.5)]">
-        <TripTags />
+        <TripTags flightsOnly={!initialMessages} />
       </div>
       <main className="flex flex-1 flex-col">
         <PlannerChat initialMessages={initialMessages} />

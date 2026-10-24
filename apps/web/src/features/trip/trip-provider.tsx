@@ -13,7 +13,7 @@ export function TripProvider({ children, initialTrip = EMPTY_TRIP }: { children:
   return <TripStoreContext value={store}>{children}</TripStoreContext>;
 }
 
-function useTripStore(): TripStore {
+export function useTripStore(): TripStore {
   const store = use(TripStoreContext);
   if (!store) throw new Error("useTrip must be used inside <TripProvider>.");
   return store;

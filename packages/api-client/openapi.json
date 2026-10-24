@@ -25,10 +25,155 @@
           }
         }
       }
+    },
+    "/api/planning/session": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Restore",
+        "operationId": "restore_api_planning_session_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planning/selection": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Select",
+        "operationId": "select_api_planning_selection_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/planning/messages": {
+      "post": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "Messages",
+        "operationId": "messages_api_planning_messages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE frames containing planning events.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningEvent",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ChatMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "text"
+        ],
+        "title": "ChatMessage"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -42,6 +187,627 @@
           "status"
         ],
         "title": "HealthResponse"
+      },
+      "Journey": {
+        "properties": {
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/Leg"
+            },
+            "type": "array",
+            "title": "Legs"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "title": "Durationminutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "legs",
+          "durationMinutes"
+        ],
+        "title": "Journey"
+      },
+      "Leg": {
+        "properties": {
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination"
+          },
+          "airline": {
+            "type": "string",
+            "title": "Airline"
+          },
+          "flightNumber": {
+            "type": "string",
+            "title": "Flightnumber"
+          },
+          "departsAt": {
+            "type": "string",
+            "title": "Departsat"
+          },
+          "arrivesAt": {
+            "type": "string",
+            "title": "Arrivesat"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "title": "Durationminutes"
+          },
+          "cabin": {
+            "type": "string",
+            "title": "Cabin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "destination",
+          "airline",
+          "flightNumber",
+          "departsAt",
+          "arrivesAt",
+          "durationMinutes",
+          "cabin"
+        ],
+        "title": "Leg"
+      },
+      "Offer": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/Journey"
+          },
+          "inbound": {
+            "$ref": "#/components/schemas/Journey"
+          },
+          "cabin": {
+            "type": "string",
+            "title": "Cabin"
+          },
+          "totalUsd": {
+            "type": "number",
+            "title": "Totalusd"
+          },
+          "travelers": {
+            "type": "integer",
+            "title": "Travelers"
+          },
+          "bookingUrl": {
+            "type": "string",
+            "title": "Bookingurl"
+          },
+          "retrievedAt": {
+            "type": "string",
+            "title": "Retrievedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "outbound",
+          "inbound",
+          "cabin",
+          "totalUsd",
+          "travelers",
+          "bookingUrl",
+          "retrievedAt"
+        ],
+        "title": "Offer"
+      },
+      "PlanningEvent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "session.updated",
+              "trip.updated",
+              "search.started",
+              "flights.ready",
+              "assistant.message",
+              "turn.completed",
+              "turn.failed"
+            ],
+            "title": "Type"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "session",
+          "message"
+        ],
+        "title": "PlanningEvent"
+      },
+      "Preferences": {
+        "properties": {
+          "maxStops": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxstops"
+          },
+          "earliestDepartureHour": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 23.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliestdeparturehour"
+          },
+          "cabin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "economy",
+                  "premium_economy",
+                  "business"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cabin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "maxStops",
+          "earliestDepartureHour",
+          "cabin"
+        ],
+        "title": "Preferences"
+      },
+      "Recommendation": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "budget",
+              "mid-range",
+              "luxury"
+            ],
+            "title": "Category"
+          },
+          "offerId": {
+            "type": "string",
+            "title": "Offerid"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "overBudgetUsd": {
+            "type": "number",
+            "title": "Overbudgetusd"
+          },
+          "overBudgetPercent": {
+            "type": "number",
+            "title": "Overbudgetpercent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "offerId",
+          "rationale",
+          "overBudgetUsd",
+          "overBudgetPercent"
+        ],
+        "title": "Recommendation"
+      },
+      "SelectionRequest": {
+        "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "title": "Expectedrevision"
+          },
+          "offerId": {
+            "type": "string",
+            "title": "Offerid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expectedRevision",
+          "offerId"
+        ],
+        "title": "SelectionRequest"
+      },
+      "Session": {
+        "properties": {
+          "analyticsId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Analyticsid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
+          },
+          "trip": {
+            "$ref": "#/components/schemas/Trip"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/Preferences"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "offers": {
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            },
+            "type": "array",
+            "title": "Offers"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "type": "array",
+            "title": "Recommendations"
+          },
+          "selectedOfferId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectedofferid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "understanding",
+              "searching",
+              "complete",
+              "interrupted",
+              "error"
+            ],
+            "title": "Status",
+            "default": "idle"
+          },
+          "searchKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searchkey"
+          },
+          "searchedCabins": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "economy",
+                "premium_economy",
+                "business"
+              ]
+            },
+            "type": "array",
+            "title": "Searchedcabins"
+          },
+          "searchUpdatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searchupdatedat"
+          },
+          "searchDepth": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Searchdepth",
+            "default": 3
+          },
+          "lastRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastrequestid"
+          },
+          "updatedAt": {
+            "type": "string",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "analyticsId",
+          "revision",
+          "trip",
+          "preferences",
+          "messages",
+          "offers",
+          "recommendations",
+          "selectedOfferId",
+          "status",
+          "searchKey",
+          "searchedCabins",
+          "searchUpdatedAt",
+          "searchDepth",
+          "lastRequestId",
+          "updatedAt"
+        ],
+        "title": "Session"
+      },
+      "Trip": {
+        "properties": {
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination"
+          },
+          "departureDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departuredate"
+          },
+          "returnDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returndate"
+          },
+          "travelers": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travelers"
+          },
+          "budgetUsd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budgetusd"
+          },
+          "flightBudgetUsd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flightbudgetusd"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "destination",
+          "departureDate",
+          "returnDate",
+          "travelers",
+          "budgetUsd",
+          "flightBudgetUsd"
+        ],
+        "title": "Trip"
+      },
+      "TurnRequest": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requestid"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expectedrevision"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Text",
+            "default": ""
+          },
+          "patch": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "origin",
+                "destination",
+                "departureDate",
+                "returnDate",
+                "travelers",
+                "budgetUsd",
+                "flightBudgetUsd"
+              ]
+            },
+            "type": "object",
+            "title": "Patch"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "UTC"
+          },
+          "retry": {
+            "type": "boolean",
+            "title": "Retry",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "expectedRevision"
+        ],
+        "title": "TurnRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   }

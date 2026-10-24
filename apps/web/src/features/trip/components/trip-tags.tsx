@@ -76,13 +76,24 @@ const TAGS: Tag[] = [
   },
 ];
 
+function FlightBudgetEditor(props: EditorProps) {
+  return <BudgetEditor {...props} field="flightBudgetUsd" />;
+}
+
 /**
  * The trip summary pinned above the conversation, as a row of luggage tags. The assistant
  * fills them in as you chat, and each tag opens an editor so you can set or correct it yourself.
  */
-export function TripTags() {
+export function TripTags({ flightsOnly = false }: { flightsOnly?: boolean }) {
   const { trip, updateTrip } = useTrip();
-  const missing = TAGS.filter((tag) => tag.missing(trip));
+  const tags = flightsOnly ? TAGS.map((tag): Tag => tag.key === "budget" ? {
+    ...tag, label: "Flight budget",
+    value: (trip) => trip.flightBudgetUsd !== null && formatUsd(trip.flightBudgetUsd),
+    detail: () => "Optional · All adults",
+    missing: (trip) => trip.flightBudgetUsd === null,
+    Editor: FlightBudgetEditor,
+  } : tag.key === "travelers" ? { ...tag, label: "Adults", value: (trip) => `${trip.travelers} adult${trip.travelers === 1 ? "" : "s"}`, detail: () => "Adults only" } : tag) : TAGS;
+  const missing = tags.filter((tag) => tag.missing(trip) && (!flightsOnly || tag.key !== "budget"));
   const ready = missingFields(trip).length === 0;
 
   return (
@@ -92,7 +103,7 @@ export function TripTags() {
           id="trip-tags-title"
           className="font-mono text-xs font-bold tracking-widest text-night uppercase dark:text-white"
         >
-          Your trip · Round trip · 1 room
+          Your trip · Round trip{!flightsOnly && " · 1 room"}
         </h2>
         <p
           className={cn(
@@ -101,7 +112,7 @@ export function TripTags() {
           )}
         >
           {ready ? (
-            "✓ Ready to search"
+            flightsOnly ? "✓ Details added" : "✓ Ready to search"
           ) : (
             <>
               {missing.length} {missing.length === 1 ? "detail" : "details"} to go
@@ -112,7 +123,7 @@ export function TripTags() {
         </p>
       </div>
       <div className="mx-auto flex max-w-6xl gap-3.5 overflow-x-auto px-4 pt-3 pb-4 [scrollbar-width:none] sm:px-6">
-        {TAGS.map((tag) => (
+        {tags.map((tag) => (
           <LuggageTag key={tag.key} tag={tag} trip={trip} updateTrip={updateTrip} />
         ))}
       </div>
