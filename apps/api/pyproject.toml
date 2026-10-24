@@ -7,12 +7,19 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "airportsdata>=20260905",
+    "certifi>=2026.10.19",
     "fastapi[standard]>=0.143.1",
+    "flights",
+    "langchain-openai>=1.7.2",
+    "langgraph>=1.2.16",
+    "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.0",
 ]
 
 [project.scripts]
 export-openapi = "travel_aid.openapi:main"
+migrate = "travel_aid.infrastructure.sessions:main"
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
@@ -40,5 +47,12 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC"]
 strict = true
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["fli.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+flights = { git = "https://github.com/punitarani/fli.git", rev = "881aee5ff4321e81ea2157cb44be94ce6a21dc1b" }
