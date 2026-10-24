@@ -13,9 +13,7 @@ The first integration is flight search through [Fli](https://github.com/punitara
 through an application-owned adapter. A LangGraph workflow uses OpenAI `gpt-6-luna` to interpret
 chat messages, validates trip details, searches flights, and streams results to the homepage.
 Anonymous plans and selections persist in PostgreSQL (Neon through Vercel). Hotel integration
-follows the flight flow. See [flight planning](docs/flight-planning.md) for contracts and policy.
-PostHog links product events, AI traces and errors per anonymous plan. See
-[observability](docs/observability.md) for development setup, privacy controls and dashboards.
+follows the flight flow. PostHog links product events, AI traces and errors per anonymous plan.
 
 ## Repository layout
 

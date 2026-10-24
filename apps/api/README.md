@@ -30,14 +30,12 @@ for the source inspection, scanner results, limitations, and remaining validatio
 search is the first delivery milestone; hotel integration comes later.
 
 The flight workflow is implemented in `planning/`, `providers/fli.py`, and
-`recommendations/flights.py`. See [flight planning](../../docs/flight-planning.md) for the API,
-schema, ranking policy, cancellation guarantees, and setup steps. Planning needs
-`OPENAI_API_KEY` and `DATABASE_URL`; it defaults to `gpt-6-luna` via the Responses API. Apply
-the migration with `DATABASE_URL_UNPOOLED` before serving planning requests.
+`recommendations/flights.py`. Planning needs `OPENAI_API_KEY` and `DATABASE_URL`; it defaults
+to `gpt-6-luna` via the Responses API. Apply the migration with `DATABASE_URL_UNPOOLED` before
+serving planning requests.
 
 `pytest` runs isolated workflow and HTTP tests without provider credentials. To exercise real
 PostgreSQL locking and recovery locally, supply **a dedicated test database** as
 `TEST_DATABASE_URL`. That integration test skips when unset; CI runs it with a PostgreSQL
 service. It never reads the runtime `DATABASE_URL` for tests. Live OpenAI/Neon verification is
-available separately from automated tests. See [observability](../../docs/observability.md)
-for the PostHog configuration, event contract and live synthetic verification notes.
+available separately from automated tests.
