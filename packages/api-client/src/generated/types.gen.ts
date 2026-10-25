@@ -5,6 +5,34 @@ export type ClientOptions = {
 };
 
 /**
+ * ChatMessage
+ */
+export type ChatMessage = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Role
+     */
+    role: 'user' | 'assistant';
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * HTTPValidationError
+ */
+export type HttpValidationError = {
+    /**
+     * Detail
+     */
+    detail?: Array<ValidationError>;
+};
+
+/**
  * HealthResponse
  */
 export type HealthResponse = {
@@ -12,6 +40,317 @@ export type HealthResponse = {
      * Status
      */
     status: 'ok';
+};
+
+/**
+ * Journey
+ */
+export type Journey = {
+    /**
+     * Legs
+     */
+    legs: Array<Leg>;
+    /**
+     * Durationminutes
+     */
+    durationMinutes: number;
+};
+
+/**
+ * Leg
+ */
+export type Leg = {
+    /**
+     * Origin
+     */
+    origin: string;
+    /**
+     * Destination
+     */
+    destination: string;
+    /**
+     * Airline
+     */
+    airline: string;
+    /**
+     * Flightnumber
+     */
+    flightNumber: string;
+    /**
+     * Departsat
+     */
+    departsAt: string;
+    /**
+     * Arrivesat
+     */
+    arrivesAt: string;
+    /**
+     * Durationminutes
+     */
+    durationMinutes: number;
+    /**
+     * Cabin
+     */
+    cabin: string;
+};
+
+/**
+ * Offer
+ */
+export type Offer = {
+    /**
+     * Id
+     */
+    id: string;
+    outbound: Journey;
+    inbound: Journey;
+    /**
+     * Cabin
+     */
+    cabin: string;
+    /**
+     * Totalusd
+     */
+    totalUsd: number;
+    /**
+     * Travelers
+     */
+    travelers: number;
+    /**
+     * Bookingurl
+     */
+    bookingUrl: string;
+    /**
+     * Retrievedat
+     */
+    retrievedAt: string;
+};
+
+/**
+ * PlanningEvent
+ */
+export type PlanningEvent = {
+    /**
+     * Type
+     */
+    type: 'session.updated' | 'trip.updated' | 'search.started' | 'flights.ready' | 'assistant.message' | 'turn.completed' | 'turn.failed';
+    session: Session;
+    /**
+     * Message
+     */
+    message: string | null;
+};
+
+/**
+ * Preferences
+ */
+export type Preferences = {
+    /**
+     * Maxstops
+     */
+    maxStops: number | null;
+    /**
+     * Earliestdeparturehour
+     */
+    earliestDepartureHour: number | null;
+    /**
+     * Cabin
+     */
+    cabin: 'economy' | 'premium_economy' | 'business' | null;
+};
+
+/**
+ * Recommendation
+ */
+export type Recommendation = {
+    /**
+     * Category
+     */
+    category: 'budget' | 'mid-range' | 'luxury';
+    /**
+     * Offerid
+     */
+    offerId: string;
+    /**
+     * Rationale
+     */
+    rationale: string;
+    /**
+     * Overbudgetusd
+     */
+    overBudgetUsd: number;
+    /**
+     * Overbudgetpercent
+     */
+    overBudgetPercent: number;
+};
+
+/**
+ * SelectionRequest
+ */
+export type SelectionRequest = {
+    /**
+     * Expectedrevision
+     */
+    expectedRevision: number;
+    /**
+     * Offerid
+     */
+    offerId: string;
+};
+
+/**
+ * Session
+ */
+export type Session = {
+    /**
+     * Analyticsid
+     */
+    analyticsId: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    trip: Trip;
+    preferences: Preferences;
+    /**
+     * Messages
+     */
+    messages: Array<ChatMessage>;
+    /**
+     * Offers
+     */
+    offers: Array<Offer>;
+    /**
+     * Recommendations
+     */
+    recommendations: Array<Recommendation>;
+    /**
+     * Selectedofferid
+     */
+    selectedOfferId: string | null;
+    /**
+     * Status
+     */
+    status: 'idle' | 'understanding' | 'searching' | 'complete' | 'interrupted' | 'error';
+    /**
+     * Searchkey
+     */
+    searchKey: string | null;
+    /**
+     * Searchedcabins
+     */
+    searchedCabins: Array<'economy' | 'premium_economy' | 'business'>;
+    /**
+     * Searchupdatedat
+     */
+    searchUpdatedAt: string | null;
+    /**
+     * Searchdepth
+     */
+    searchDepth: number;
+    /**
+     * Lastrequestid
+     */
+    lastRequestId: string | null;
+    /**
+     * Updatedat
+     */
+    updatedAt: string;
+};
+
+/**
+ * Trip
+ */
+export type Trip = {
+    /**
+     * Origin
+     */
+    origin: string | null;
+    /**
+     * Destination
+     */
+    destination: string | null;
+    /**
+     * Departuredate
+     */
+    departureDate: string | null;
+    /**
+     * Returndate
+     */
+    returnDate: string | null;
+    /**
+     * Travelers
+     */
+    travelers: number | null;
+    /**
+     * Budgetusd
+     */
+    budgetUsd: number | null;
+    /**
+     * Flightbudgetusd
+     */
+    flightBudgetUsd: number | null;
+};
+
+/**
+ * TurnRequest
+ */
+export type TurnRequest = {
+    /**
+     * Requestid
+     */
+    requestId: string;
+    /**
+     * Expectedrevision
+     */
+    expectedRevision: number;
+    /**
+     * Text
+     */
+    text?: string;
+    /**
+     * Patch
+     */
+    patch?: {
+        [key: string]: string | number | number | null;
+    };
+    /**
+     * Timezone
+     */
+    timezone?: string;
+    /**
+     * Retry
+     */
+    retry?: boolean;
+};
+
+/**
+ * ValidationError
+ */
+export type ValidationError = {
+    /**
+     * Location
+     */
+    loc: Array<string | number>;
+    /**
+     * Message
+     */
+    msg: string;
+    /**
+     * Error Type
+     */
+    type: string;
+    /**
+     * Input
+     */
+    input?: unknown;
+    /**
+     * Context
+     */
+    ctx?: {
+        [key: string]: unknown;
+    };
 };
 
 export type GetHealthData = {
@@ -29,3 +368,69 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type RestoreApiPlanningSessionPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/planning/session';
+};
+
+export type RestoreApiPlanningSessionPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: Session;
+};
+
+export type RestoreApiPlanningSessionPostResponse = RestoreApiPlanningSessionPostResponses[keyof RestoreApiPlanningSessionPostResponses];
+
+export type SelectApiPlanningSelectionPostData = {
+    body: SelectionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/planning/selection';
+};
+
+export type SelectApiPlanningSelectionPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SelectApiPlanningSelectionPostError = SelectApiPlanningSelectionPostErrors[keyof SelectApiPlanningSelectionPostErrors];
+
+export type SelectApiPlanningSelectionPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: Session;
+};
+
+export type SelectApiPlanningSelectionPostResponse = SelectApiPlanningSelectionPostResponses[keyof SelectApiPlanningSelectionPostResponses];
+
+export type MessagesApiPlanningMessagesPostData = {
+    body: TurnRequest;
+    path?: never;
+    query?: never;
+    url: '/api/planning/messages';
+};
+
+export type MessagesApiPlanningMessagesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MessagesApiPlanningMessagesPostError = MessagesApiPlanningMessagesPostErrors[keyof MessagesApiPlanningMessagesPostErrors];
+
+export type MessagesApiPlanningMessagesPostResponses = {
+    /**
+     * SSE frames containing planning events.
+     */
+    200: PlanningEvent;
+};
+
+export type MessagesApiPlanningMessagesPostResponse = MessagesApiPlanningMessagesPostResponses[keyof MessagesApiPlanningMessagesPostResponses];

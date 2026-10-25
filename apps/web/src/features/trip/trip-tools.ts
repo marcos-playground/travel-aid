@@ -25,6 +25,7 @@ const TRIP_PROPERTIES: Record<TripField, Record<string, unknown>> = {
   returnDate: nullable({ type: "string", format: "date" }, "returnDate"),
   travelers: nullable({ type: "integer", minimum: 1, maximum: MAX_TRAVELERS }, "travelers"),
   budgetUsd: nullable({ type: "number", exclusiveMinimum: 0, maximum: MAX_BUDGET_USD }, "budgetUsd"),
+  flightBudgetUsd: nullable({ type: "number", exclusiveMinimum: 0, maximum: MAX_BUDGET_USD }, "flightBudgetUsd"),
 };
 
 /** What an agent needs to know to finish the trip: current values and what is still missing. */
@@ -32,7 +33,7 @@ function describeTrip(trip: Trip) {
   const missing = missingFields(trip);
   return {
     trip,
-    fixed: { tripType: "round_trip", rooms: ROOMS, currency: "USD" },
+    fixed: { tripType: "round_trip", rooms: ROOMS, currency: "USD", adultsOnly: true },
     missingFields: missing.map((field) => ({ field, description: TRIP_FIELDS[field].description })),
     readyToSearch: missing.length === 0,
   };
@@ -50,7 +51,7 @@ function toPatch(input: Record<string, unknown>): { patch: TripPatch; unknown: s
 
 function hasExpectedType(field: TripField, value: unknown) {
   if (value === null) return true;
-  return field === "travelers" || field === "budgetUsd" ? typeof value === "number" : typeof value === "string";
+  return field === "travelers" || field === "budgetUsd" || field === "flightBudgetUsd" ? typeof value === "number" : typeof value === "string";
 }
 
 /**
@@ -64,7 +65,7 @@ export function createTripTools(store: TripStore): WebMcpTool[] {
       title: "Get trip details",
       description:
         "Read the trip being planned: origin, destination, dates, travelers and budget. Lists the details still " +
-        "missing before flights and hotels can be searched. The trip is always round trip, one hotel room, in USD.",
+        "missing before flights can be searched. Flights are round trip, adults only, in USD. Flight budget is optional; combined flight-and-hotel budget is separate.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       execute: () => describeTrip(store.getSnapshot()),

@@ -9,6 +9,7 @@ export const SAMPLE_TRIP: Trip = {
   returnDate: "2027-02-15",
   travelers: 1,
   budgetUsd: 2000,
+  flightBudgetUsd: null,
 };
 
 /**

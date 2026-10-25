@@ -10,9 +10,18 @@ export type TripUpdateResult = { ok: true; trip: Trip } | { ok: false; trip: Tri
 export function createTripStore(initial: Trip = EMPTY_TRIP) {
   let trip = initial;
   const listeners = new Set<() => void>();
+  const editListeners = new Set<(patch: TripPatch) => void>();
 
   return {
     getSnapshot: () => trip,
+    replace(next: Trip) {
+      trip = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribeEdits(listener: (patch: TripPatch) => void) {
+      editListeners.add(listener);
+      return () => { editListeners.delete(listener); };
+    },
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {
@@ -31,6 +40,7 @@ export function createTripStore(initial: Trip = EMPTY_TRIP) {
 
       trip = next;
       listeners.forEach((listener) => listener());
+      editListeners.forEach((listener) => listener(patch));
       return { ok: true, trip };
     },
   };

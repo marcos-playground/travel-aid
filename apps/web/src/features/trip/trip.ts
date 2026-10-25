@@ -1,8 +1,8 @@
 import { differenceInCalendarDays, format, isValid, parse } from "date-fns";
 
 /**
- * The details the first flight and hotel search needs. The MVP always books one hotel
- * room, round trip, in USD, so those are constants rather than fields.
+ * Flight planning details, plus the separate combined budget kept for future hotel planning.
+ * Flights are round trip, adults only, in USD.
  *
  * Dates are calendar dates in `YYYY-MM-DD` form, with no time zone.
  */
@@ -13,6 +13,7 @@ export type Trip = {
   returnDate: string | null;
   travelers: number | null;
   budgetUsd: number | null;
+  flightBudgetUsd: number | null;
 };
 
 export type TripField = keyof Trip;
@@ -26,6 +27,7 @@ export const EMPTY_TRIP: Trip = {
   returnDate: null,
   travelers: null,
   budgetUsd: null,
+  flightBudgetUsd: null,
 };
 
 export const ROOMS = 1;
@@ -49,19 +51,23 @@ export const TRIP_FIELDS: Record<TripField, { label: string; description: string
   },
   departureDate: {
     label: "Depart",
-    description: "Outbound flight date and hotel check-in date, as YYYY-MM-DD. Today or later.",
+    description: "Outbound flight date, as YYYY-MM-DD. Today or later.",
   },
   returnDate: {
     label: "Return",
-    description: "Return flight date and hotel check-out date, as YYYY-MM-DD. Today or later, and after the departure date.",
+    description: "Return flight date, as YYYY-MM-DD. Today or later, and after the departure date.",
   },
   travelers: {
-    label: "Travelers",
-    description: `Number of people traveling, from 1 to ${MAX_TRAVELERS}. They share one hotel room.`,
+    label: "Adults",
+    description: `Number of adults traveling, from 1 to ${MAX_TRAVELERS}. Children and infants aren't supported yet.`,
   },
   budgetUsd: {
     label: "Budget",
     description: "Total budget in US dollars for round-trip flights for everyone plus the full hotel stay.",
+  },
+  flightBudgetUsd: {
+    label: "Flight budget",
+    description: "Optional USD target for round-trip flights for all adults. Worthwhile upgrades may cost more.",
   },
 };
 
@@ -72,6 +78,7 @@ export const TRIP_FIELD_ORDER: TripField[] = [
   "returnDate",
   "travelers",
   "budgetUsd",
+  "flightBudgetUsd",
 ];
 
 export function parseTripDate(value: string): Date | null {
@@ -84,7 +91,7 @@ export function toTripDate(date: Date): string {
 }
 
 export function missingFields(trip: Trip): TripField[] {
-  return TRIP_FIELD_ORDER.filter((field) => trip[field] === null);
+  return TRIP_FIELD_ORDER.filter((field) => field !== "budgetUsd" && field !== "flightBudgetUsd" && trip[field] === null);
 }
 
 /**
@@ -134,6 +141,9 @@ export function validateTrip(
   }
   if (trip.budgetUsd !== null && (!Number.isFinite(trip.budgetUsd) || trip.budgetUsd <= 0 || trip.budgetUsd > MAX_BUDGET_USD)) {
     errors.budgetUsd = "Enter a budget above $0.";
+  }
+  if (trip.flightBudgetUsd !== null && (!Number.isFinite(trip.flightBudgetUsd) || trip.flightBudgetUsd <= 0 || trip.flightBudgetUsd > MAX_BUDGET_USD)) {
+    errors.flightBudgetUsd = "Enter a budget above $0.";
   }
 
   return errors;
