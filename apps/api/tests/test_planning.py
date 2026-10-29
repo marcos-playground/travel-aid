@@ -37,6 +37,7 @@ from travel_aid.recommendations.flights import (
     mid_range_picks,
     mid_range_pool,
     should_search,
+    upgrade_note,
 )
 
 
@@ -145,6 +146,11 @@ def test_model_airports_are_verified_before_search() -> None:
     ]
     # Nearby airports in other cities wait for a later version.
     assert accept_airports("Fort Myers", ["RSW", "TPA"]) == ["RSW"]
+    # A hallucinated airport is rejected even when no nearby proposal outvotes it.
+    assert accept_airports("South Florida", ["MAD"]) == []
+    assert accept_airports("South Florida", ["MAD", "MIA"]) == ["MIA"]
+    # A region the data never names as a subdivision keeps the proximity-only fallback.
+    assert accept_airports("Bay Area", ["SFO", "OAK", "SJC"]) == ["SFO", "OAK", "SJC"]
     codes, question = search_details(
         trip(origin="South Florida", destination="Madrid"),
         datetime.now(UTC).date(),
@@ -197,6 +203,9 @@ def test_luxury_upgrade_limits_and_economy_fallback() -> None:
     expensive = [offer("eco", 500), offer("biz", 1300, cabin="business", flight="eco")]
     picks, economy = luxury_picks(expensive, Preferences(), set())
     assert [o.id for o in picks] == ["eco"] and economy
+    # An economy fallback always explains itself, even with no upgrade price to quote.
+    assert upgrade_note([offer("eco", 500)], offer("eco", 500)) == "No upgrade met the value limit."
+    assert "Business from +$800" in upgrade_note(expensive, expensive[0])
     assert not should_search("business", Preferences(cabin="economy"))
     assert should_search("business", Preferences())
 
@@ -314,6 +323,39 @@ def test_workflow_auto_search_event_order_and_budget_rerank(
     command = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"destination": None})
     asyncio.run(run_turn(session, command, threading.Event(), emit, persist))
     assert session.offers == [] and "destination" in session.messages[-1].text
+
+
+def test_workflow_budget_change_keeps_picks_instead_of_rebuilding_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A budget edit reuses the cache, so picks must not be re-ranked over every cabin."""
+    by_cabin = {
+        "economy": [offer("e1", 700), offer("e2", 900)],
+        "premium_economy": [offer("p", 800, cabin="premium_economy")],
+        "business": [offer("b", 2000, cabin="business")],
+    }
+    session = Session(trip=trip())
+
+    def search(*args: Any) -> list[Offer]:
+        return by_cabin[args[3]]
+
+    async def persist(value: Session) -> None:
+        return None
+
+    async def emit(value: PlanningEvent) -> None:
+        return None
+
+    monkeypatch.setattr("travel_aid.planning.workflow.search_cabin", search)
+    first = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"travelers": 2})
+    asyncio.run(run_turn(session, first, threading.Event(), emit, persist))
+    picked = [(r.category, r.offerId) for r in session.recommendations]
+    assert picked == [("budget", "e1"), ("budget", "e2"), ("luxury", "p")]
+
+    budget = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"flightBudgetUsd": 600})
+    asyncio.run(run_turn(session, budget, threading.Event(), emit, persist))
+    assert [(r.category, r.offerId) for r in session.recommendations] == picked
+    over = {r.offerId: r.overBudgetUsd for r in session.recommendations}
+    assert over == {"e1": 100, "e2": 300, "p": 200}
 
 
 def test_workflow_clarifies_without_search_and_preserves_unmentioned_fields(

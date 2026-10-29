@@ -227,8 +227,8 @@ async def run_turn(
                 session.recommendations = []
                 session.selectedOfferId = None
                 session.searchedCabins = []
-            # "More options" adds flights beneath the picks the user is already looking at.
-            keep = more and bool(session.recommendations)
+            # Picks the clearing above left standing stay; new flights land beneath them.
+            keep = bool(session.recommendations)
             codes = state["codes"]
             if not keep and any(
                 (getattr(session.trip, field) or "").strip().upper() != " ".join(codes[field])

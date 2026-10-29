@@ -243,7 +243,7 @@ def usd(amount: float) -> str:
     return f"${amount:,.0f}"
 
 
-def upgrade_note(offers: list[Offer], pick: Offer) -> str | None:
+def upgrade_note(offers: list[Offer], pick: Offer) -> str:
     """Only prices already in the search results; never estimate an upgrade."""
     parts = [
         f"{CABIN_NAMES[cabin]} from +{usd(price - pick.totalUsd)}"
@@ -251,7 +251,8 @@ def upgrade_note(offers: list[Offer], pick: Offer) -> str | None:
         if (price := min((o.totalUsd for o in offers if o.cabin == cabin), default=None))
         and price > pick.totalUsd
     ]
-    return f"No upgrade met the value limit. {'; '.join(parts)}." if parts else None
+    note = "No upgrade met the value limit."
+    return f"{note} {'; '.join(parts)}." if parts else note
 
 
 def default_reason(category: Category, offer: Offer) -> str:
