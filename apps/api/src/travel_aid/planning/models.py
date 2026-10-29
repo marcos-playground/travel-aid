@@ -68,10 +68,17 @@ class PreferenceChange(Contract):
     value: StrictStr | StrictInt | None
 
 
+class PlaceAirports(Contract):
+    field: Literal["origin", "destination"]
+    codes: list[StrictStr]
+
+
 class Interpretation(Contract):
     """Required nullable fields also satisfy the provider's strict JSON schema contract."""
 
     changes: list[TripChange]
+    # Proposals only: code checks every airport before it is searched.
+    airports: list[PlaceAirports]
     preferences: list[PreferenceChange]
     clarification: str | None
     unsupportedTravelers: bool
@@ -83,6 +90,7 @@ class Leg(Contract):
     origin: str
     destination: str
     airline: str
+    airlineCode: str = ""
     flightNumber: str
     departsAt: str
     arrivesAt: str
@@ -112,6 +120,8 @@ class Recommendation(Contract):
     rationale: str
     overBudgetUsd: float
     overBudgetPercent: float
+    carryOn: Literal["likely"] | None = None
+    upgradeNote: str | None = None
 
 
 class ChatMessage(Contract):
@@ -130,13 +140,15 @@ class Session(Contract):
     offers: list[Offer] = Field(default_factory=list)
     recommendations: list[Recommendation] = Field(default_factory=list)
     selectedOfferId: str | None = None
+    # Airports accepted for a typed place, keyed by its normalized text.
+    placeAirports: dict[str, list[str]] = Field(default_factory=dict)
     status: Literal["idle", "understanding", "searching", "complete", "interrupted", "error"] = (
         "idle"
     )
     searchKey: str | None = None
     searchedCabins: list[Cabin] = Field(default_factory=list)
     searchUpdatedAt: str | None = None
-    searchDepth: int = Field(default=3, ge=1, le=10)
+    searchDepth: int = Field(default=5, ge=1, le=10)
     lastRequestId: str | None = None
     updatedAt: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 

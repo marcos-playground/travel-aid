@@ -73,6 +73,10 @@ export type Leg = {
      */
     airline: string;
     /**
+     * Airlinecode
+     */
+    airlineCode: string;
+    /**
      * Flightnumber
      */
     flightNumber: string;
@@ -183,6 +187,14 @@ export type Recommendation = {
      * Overbudgetpercent
      */
     overBudgetPercent: number;
+    /**
+     * Carryon
+     */
+    carryOn: 'likely' | null;
+    /**
+     * Upgradenote
+     */
+    upgradeNote: string | null;
 };
 
 /**
@@ -229,6 +241,12 @@ export type Session = {
      * Selectedofferid
      */
     selectedOfferId: string | null;
+    /**
+     * Placeairports
+     */
+    placeAirports: {
+        [key: string]: Array<string>;
+    };
     /**
      * Status
      */

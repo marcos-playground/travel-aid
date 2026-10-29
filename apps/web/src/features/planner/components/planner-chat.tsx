@@ -148,7 +148,7 @@ function LiveFlightChat() {
       <div className="flex flex-1 flex-col gap-4 py-8 sm:py-12" aria-live="polite">
         <div className="space-y-2">
           <h2 className="font-heading text-2xl font-extrabold tracking-tight">Find your flight</h2>
-          <p className="max-w-prose text-muted-foreground">Tell me your departure airport, destination, dates and number of adults. You can add a flight budget or refine your preferences as we go.</p>
+          <p className="max-w-prose text-muted-foreground">Tell me where you’re flying from and to (a city, region or airport), your dates and number of adults. You can add a flight budget or refine your preferences as we go.</p>
           <p className="text-xs text-muted-foreground">Your plan is saved in this browser between visits.</p>
         </div>
         {!session && !planner.error && <p role="status" className="text-sm text-muted-foreground">Recovering your plan…</p>}

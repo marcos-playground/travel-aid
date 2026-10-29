@@ -1,5 +1,6 @@
 """Deterministic validation and airport resolution, outside the language model."""
 
+import math
 import re
 import unicodedata
 from datetime import date
@@ -48,6 +49,63 @@ def airport_data() -> dict[str, Any]:
     return airportsdata.load("IATA")
 
 
+MAX_PLACE_AIRPORTS = 4
+# A city's own airports, and a region's airports, stay within about a 3-hour drive.
+CITY_RADIUS_KM = 150
+REGION_RADIUS_KM = 300
+# "South Florida" names part of a subdivision the data stores as "Florida".
+COMPASS_WORDS = frozenset(
+    {"north", "south", "east", "west", "northern", "southern", "eastern", "western", "central"}
+)
+
+
+def searchable(code: str) -> bool:
+    return code in airport_data() and code in Airport.__members__
+
+
+def distance_km(a: str, b: str) -> float:
+    first, second = airport_data()[a], airport_data()[b]
+    lat1, lon1, lat2, lon2 = map(
+        math.radians, (first["lat"], first["lon"], second["lat"], second["lon"])
+    )
+    h = (
+        math.sin((lat2 - lat1) / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    )
+    return 6371 * 2 * math.asin(math.sqrt(h))
+
+
+def place_anchors(query: str) -> tuple[list[str], float]:
+    """Airports that fix where a place is: its own city, else its subdivision."""
+    airports = airport_data()
+    city = [code for code, airport in airports.items() if normalize(airport["city"]) == query]
+    if city:
+        return city, CITY_RADIUS_KM
+    head, _, rest = query.partition(" ")
+    region = rest if head in COMPASS_WORDS and rest else query
+    if not region:
+        return [], REGION_RADIUS_KM
+    return [
+        code for code, airport in airports.items() if normalize(airport["subd"]) == region
+    ], REGION_RADIUS_KM
+
+
+def accept_airports(place: str, codes: list[str]) -> list[str]:
+    """Keep model-proposed airports that are real, searchable and close to the named place."""
+    query = normalize(place)
+    proposed = [
+        code for code in dict.fromkeys(c.strip().upper() for c in codes) if searchable(code)
+    ]
+    anchors, radius = place_anchors(query)
+    if anchors:
+        proposed = [c for c in proposed if any(distance_km(c, a) <= radius for a in anchors)]
+    if not proposed:
+        return []
+    return [c for c in proposed if distance_km(c, proposed[0]) <= REGION_RADIUS_KM][
+        :MAX_PLACE_AIRPORTS
+    ]
+
+
 def resolve_airport(value: str) -> tuple[str | None, list[str]]:
     airports = airport_data()
     code = value.strip().upper()
@@ -72,17 +130,24 @@ def resolve_airport(value: str) -> tuple[str | None, list[str]]:
     return None, [f"{code} ({airports[code]['name']})" for code in sorted(candidates)[:6]]
 
 
-def search_details(trip: Trip, today: date) -> tuple[dict[str, str], str | None]:
+def search_details(
+    trip: Trip, today: date, known: dict[str, list[str]] | None = None
+) -> tuple[dict[str, list[str]], str | None]:
     needs = validate_trip(trip, today)
-    codes: dict[str, str] = {}
+    codes: dict[str, list[str]] = {}
     for field, label in [("origin", "departure airport"), ("destination", "destination airport")]:
         value = getattr(trip, field)
         if value is None:
             needs.append(f"your {label}")
             continue
         code, candidates = resolve_airport(value)
-        if code:
-            codes[field] = code
+        accepted = (known or {}).get(normalize(value))
+        if code and code == value.strip().upper():
+            codes[field] = [code]
+        elif accepted:
+            codes[field] = accepted
+        elif code:
+            codes[field] = [code]
         elif candidates:
             needs.append(f"which {label}: {', '.join(candidates)}")
         else:
@@ -94,6 +159,6 @@ def search_details(trip: Trip, today: date) -> tuple[dict[str, str], str | None]
     ]:
         if value is None:
             needs.append(label)
-    if len(codes) == 2 and codes["origin"] == codes["destination"]:
+    if len(codes) == 2 and set(codes["origin"]) & set(codes["destination"]):
         needs.append("different departure and destination airports")
     return codes, ("Please provide " + "; ".join(needs) + ".") if needs else None
