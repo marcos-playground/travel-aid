@@ -1,11 +1,12 @@
 "use client";
 
-import type { Journey, Offer, Session } from "@travel-aid/api-client";
+import type { Journey, Offer, Recommendation, Session } from "@travel-aid/api-client";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/features/recommendations/format";
 import { cn } from "@/lib/utils";
 
-const LABELS = { budget: "Budget", "mid-range": "Mid-range", luxury: "Luxury" };
+const LABELS = { budget: "Budget", "mid-range": "Mid-range", luxury: "Luxury" } as const;
+const CATEGORIES = Object.keys(LABELS) as Recommendation["category"][];
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 const formatUsd = (amount: number) => `${currency.format(amount)} USD`;
 function cabinLabel(cabin: string) {
@@ -47,6 +48,33 @@ function BookingDetails({ offer }: { offer: Offer }) {
   );
 }
 
+function RecommendationCard({ recommendation, offer, session, disabled, onSelect }: {
+  recommendation: Recommendation; offer: Offer; session: Session; disabled: boolean; onSelect: (id: string) => void;
+}) {
+  const selected = session.selectedOfferId === offer.id;
+  return (
+    <article className={cn("space-y-4 rounded-2xl border-2 bg-card p-5", selected ? "border-sea dark:border-lagoon" : "border-border")}>
+      <div>
+        <p className="text-2xl font-bold tabular-nums">{formatUsd(offer.totalUsd)}</p>
+        <p className="text-sm text-muted-foreground">Round trip · Total for {offer.travelers} adult{offer.travelers === 1 ? "" : "s"}</p>
+        <p className="text-sm capitalize">{cabinLabel(offer.cabin)}</p>
+        {recommendation.carryOn === "likely" && <p className="text-sm">Carry-on likely included · check before booking</p>}
+        {recommendation.overBudgetUsd > 0 ? (
+          <p className="mt-2 text-sm font-bold">{formatUsd(recommendation.overBudgetUsd)} over flight budget (+{recommendation.overBudgetPercent}%)</p>
+        ) : session.trip.flightBudgetUsd ? <p className="mt-2 text-sm">Within your flight budget</p> : null}
+      </div>
+      <Direction journey={offer.outbound} label="Outbound" />
+      <Direction journey={offer.inbound} label="Return" />
+      <p className="text-sm text-muted-foreground">{recommendation.rationale}</p>
+      {recommendation.upgradeNote && <p className="text-sm text-muted-foreground">{recommendation.upgradeNote}</p>}
+      <Button className="w-full" variant={selected ? "secondary" : "default"} disabled={disabled} aria-pressed={selected} onClick={() => onSelect(offer.id)}>
+        {selected ? "Selected · Saved in this browser" : "Choose this flight"}
+      </Button>
+      <BookingDetails offer={offer} />
+    </article>
+  );
+}
+
 export function FlightResults({ session, disabled, onSelect }: {
   session: Session; disabled: boolean; onSelect: (id: string) => void;
 }) {
@@ -54,29 +82,19 @@ export function FlightResults({ session, disabled, onSelect }: {
   return (
     <section aria-label="Flight recommendations" className="space-y-3">
       <div className="grid items-start gap-4 lg:grid-cols-3">
-        {session.recommendations.map((recommendation) => {
-          const offer = session.offers.find((offer) => offer.id === recommendation.offerId);
-          if (!offer) return null;
-          const selected = session.selectedOfferId === offer.id;
+        {CATEGORIES.map((category) => {
+          const picks = session.recommendations.flatMap((recommendation) => {
+            const offer = session.offers.find((offer) => offer.id === recommendation.offerId);
+            return recommendation.category === category && offer ? [{ recommendation, offer }] : [];
+          });
+          if (!picks.length) return null;
           return (
-            <article key={recommendation.category} className={cn("space-y-4 rounded-2xl border-2 bg-card p-5", selected ? "border-sea dark:border-lagoon" : "border-border")}>
-              <div>
-                <h3 className="font-heading text-xl font-extrabold">{LABELS[recommendation.category]}</h3>
-                <p className="mt-2 text-2xl font-bold tabular-nums">{formatUsd(offer.totalUsd)}</p>
-                <p className="text-sm text-muted-foreground">Round trip · Total for {offer.travelers} adult{offer.travelers === 1 ? "" : "s"}</p>
-                <p className="text-sm capitalize">{cabinLabel(offer.cabin)}</p>
-                {recommendation.overBudgetUsd > 0 ? (
-                  <p className="mt-2 text-sm font-bold">{formatUsd(recommendation.overBudgetUsd)} over flight budget (+{recommendation.overBudgetPercent}%)</p>
-                ) : session.trip.flightBudgetUsd ? <p className="mt-2 text-sm">Within your flight budget</p> : null}
-              </div>
-              <Direction journey={offer.outbound} label="Outbound" />
-              <Direction journey={offer.inbound} label="Return" />
-              <p className="text-sm text-muted-foreground">{recommendation.rationale}</p>
-              <Button className="w-full" variant={selected ? "secondary" : "default"} disabled={disabled} aria-pressed={selected} onClick={() => onSelect(offer.id)}>
-                {selected ? "Selected · Saved in this browser" : "Choose this flight"}
-              </Button>
-              <BookingDetails offer={offer} />
-            </article>
+            <div key={category} className="space-y-4">
+              <h3 className="font-heading text-xl font-extrabold">{LABELS[category]}</h3>
+              {picks.map(({ recommendation, offer }) => (
+                <RecommendationCard key={offer.id} recommendation={recommendation} offer={offer} session={session} disabled={disabled} onSelect={onSelect} />
+              ))}
+            </div>
           );
         })}
       </div>

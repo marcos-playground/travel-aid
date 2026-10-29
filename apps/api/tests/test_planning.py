@@ -28,10 +28,16 @@ from travel_aid.planning.models import (
     TripChange,
     TurnRequest,
 )
-from travel_aid.planning.validation import resolve_airport, search_details
+from travel_aid.planning.validation import accept_airports, resolve_airport, search_details
 from travel_aid.planning.workflow import run_turn
 from travel_aid.providers.fli import CancellableClient, SearchStopped, normalize_pair
-from travel_aid.recommendations.flights import rank, should_search
+from travel_aid.recommendations.flights import (
+    budget_picks,
+    luxury_picks,
+    mid_range_picks,
+    mid_range_pool,
+    should_search,
+)
 
 
 def trip(**changes: Any) -> Trip:
@@ -49,22 +55,47 @@ def trip(**changes: Any) -> Trip:
 
 
 def offer(
-    id: str, price: float, *, hour: int = 10, cabin: str = "economy", duration: int = 240
+    id: str,
+    price: float,
+    *,
+    hour: int = 10,
+    cabin: str = "economy",
+    duration: int = 240,
+    airline: str | None = None,
+    flight: str | None = None,
+    layover: int | None = None,
 ) -> Offer:
+    def leg(origin: str, destination: str, departs: datetime, arrives: datetime) -> Leg:
+        return Leg(
+            origin=origin,
+            destination=destination,
+            airline="Test airline",
+            airlineCode=airline or id,
+            flightNumber=flight or id,
+            departsAt=departs.isoformat(),
+            arrivesAt=arrives.isoformat(),
+            durationMinutes=duration,
+            cabin=cabin,
+        )
+
     def direction(origin: str, destination: str, day: str) -> Journey:
+        start = datetime.fromisoformat(f"{day}T{hour:02}:00:00")
+        if layover is None:
+            return Journey(
+                durationMinutes=duration,
+                legs=[leg(origin, destination, start, start + timedelta(hours=4))],
+            )
+        connection = start + timedelta(hours=2)
         return Journey(
             durationMinutes=duration,
             legs=[
-                Leg(
-                    origin=origin,
-                    destination=destination,
-                    airline="Test airline",
-                    flightNumber=id,
-                    departsAt=f"{day}T{hour:02}:00:00",
-                    arrivesAt=f"{day}T18:00:00",
-                    durationMinutes=duration,
-                    cabin=cabin,
-                )
+                leg(origin, "MIA", start, connection),
+                leg(
+                    "MIA",
+                    destination,
+                    connection + timedelta(minutes=layover),
+                    connection + timedelta(minutes=layover + 120),
+                ),
             ],
         )
 
@@ -84,7 +115,7 @@ def test_airports_dates_and_optional_separate_budget() -> None:
     codes, question = search_details(
         trip(flightBudgetUsd=None, budgetUsd=2000), datetime.now(UTC).date()
     )
-    assert codes == {"origin": "SDQ", "destination": "JFK"} and question is None
+    assert codes == {"origin": ["SDQ"], "destination": ["JFK"]} and question is None
     code, choices = resolve_airport("London")
     assert code is None and len(choices) > 1
     assert "return date" in (
@@ -106,23 +137,68 @@ def test_no_boolean_coercion_at_http_boundary() -> None:
         TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"travelers": True})
 
 
-def test_flexible_ranking_and_explicit_over_budget() -> None:
-    offers = [
-        offer("cheap", 400, hour=4, duration=500),
-        offer("nonstop", 820),
-        offer("premium-long", 950, cabin="premium_economy", duration=1000),
-        offer("business", 1000, cabin="business", duration=250),
+def test_model_airports_are_verified_before_search() -> None:
+    assert accept_airports("South Florida", ["MIA", "FLL", "PBI", "MAD", "XXX"]) == [
+        "MIA",
+        "FLL",
+        "PBI",
     ]
-    results = rank(offers, 800, Preferences())
-    assert results[0].offerId == "cheap"
-    assert results[1].category == "mid-range" and results[1].offerId == "nonstop"
-    assert results[1].overBudgetUsd == 20 and results[1].overBudgetPercent == 2.5
-    assert results[2].offerId == "business"
-    assert not should_search("business", [offer("economy", 400)], 400, Preferences())
-    assert should_search("business", [], 400, Preferences(cabin="business"))
-    assert all(
-        r.offerId != "cheap" for r in rank(offers, 800, Preferences(earliestDepartureHour=5))
+    # Nearby airports in other cities wait for a later version.
+    assert accept_airports("Fort Myers", ["RSW", "TPA"]) == ["RSW"]
+    codes, question = search_details(
+        trip(origin="South Florida", destination="Madrid"),
+        datetime.now(UTC).date(),
+        {"south florida": ["MIA", "FLL"], "madrid": ["MAD"]},
     )
+    assert codes == {"origin": ["MIA", "FLL"], "destination": ["MAD"]} and question is None
+
+
+def test_budget_takes_cheapest_distinct_options_within_layover_cap() -> None:
+    offers = [
+        offer("cheap", 400, hour=4, airline="AA"),
+        offer("same", 410, hour=5, airline="AA"),
+        offer("long-layover", 300, layover=11 * 60),
+        offer("other", 450, airline="DL"),
+        offer("fourth", 460, airline="UA"),
+    ]
+    picks = budget_picks(offers, Preferences(), set())
+    # "long-layover" is cheapest but waits 11 hours; "same" is too similar to "cheap".
+    assert [o.id for o in picks] == ["cheap", "other", "fourth"]
+
+
+def test_mid_range_rules_and_ceiling() -> None:
+    offers = [
+        offer("early", 500, hour=6, airline="AA"),
+        offer("spirit", 520, airline="NK"),
+        offer("good", 600, airline="DL"),
+        offer("pricey", 1000, airline="UA"),
+        offer("premium", 650, cabin="premium_economy", airline="BA"),
+    ]
+    pool = mid_range_pool(offers, Preferences(), set())
+    assert [o.id for o in pool] == ["good"]  # 1000 is above 1.6 × 600.
+    assert [o.id for o in mid_range_picks(pool, ["unknown", "good"])] == ["good"]
+    assert mid_range_pool(offers, Preferences(), {"good"}) == []
+    # The user's own earliest hour overrides the 7 AM rule.
+    assert "early" in {
+        o.id for o in mid_range_pool(offers, Preferences(earliestDepartureHour=6), set())
+    }
+
+
+def test_luxury_upgrade_limits_and_economy_fallback() -> None:
+    offers = [
+        offer("eco", 500, flight="X1", airline="IB"),
+        offer("biz", 1200, cabin="business", flight="X1", airline="IB"),
+        offer("prem", 700, cabin="premium_economy", flight="X1", airline="IB"),
+        offer("biz-pricey", 1300, cabin="business", flight="Y2", airline="AA"),
+    ]
+    picks, economy = luxury_picks(offers, Preferences(), set())
+    # biz-pricey has no same-flight economy price, so it compares with the 500 fallback.
+    assert [o.id for o in picks] == ["biz", "prem"] and not economy
+    expensive = [offer("eco", 500), offer("biz", 1300, cabin="business", flight="eco")]
+    picks, economy = luxury_picks(expensive, Preferences(), set())
+    assert [o.id for o in picks] == ["eco"] and economy
+    assert not should_search("business", Preferences(cabin="economy"))
+    assert should_search("business", Preferences())
 
 
 def test_normalization_never_sums_return_or_multiplies_by_adults() -> None:
@@ -150,7 +226,7 @@ def test_normalization_never_sums_return_or_multiplies_by_adults() -> None:
     inbound = result("JFK", "SDQ", "2099-02-15", 900)
     args = (
         trip(),
-        {"origin": "SDQ", "destination": "JFK"},
+        {"origin": ["SDQ"], "destination": ["JFK"]},
         "https://www.google.com/travel/flights",
         datetime.now(UTC).isoformat(),
     )
@@ -159,6 +235,8 @@ def test_normalization_never_sums_return_or_multiplies_by_adults() -> None:
     outbound.price = None
     assert normalize_pair((outbound, inbound), *args) is None
     outbound.price, outbound.currency = 800, "EUR"
+    assert normalize_pair((outbound, inbound), *args) is None
+    outbound.currency, inbound.self_transfer = "USD", True
     assert normalize_pair((outbound, inbound), *args) is None
 
 
@@ -224,7 +302,7 @@ def test_workflow_auto_search_event_order_and_budget_rerank(
     monkeypatch.setattr("travel_aid.planning.workflow.search_cabin", search)
     command = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"travelers": 2})
     asyncio.run(run_turn(session, command, threading.Event(), emit, persist))
-    assert calls == ["economy"]
+    assert calls == ["economy", "premium_economy", "business"]
     types = [event.type for event in events]
     assert (
         types.index("trip.updated") < types.index("search.started") < types.index("flights.ready")
@@ -232,7 +310,7 @@ def test_workflow_auto_search_event_order_and_budget_rerank(
     assert saved[-1].offers[0].id == "e" and saved[-1].status == "complete"
     command = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"flightBudgetUsd": 810})
     asyncio.run(run_turn(session, command, threading.Event(), emit, persist))
-    assert calls == ["economy"]  # Same route, cached results, only budget changed.
+    assert calls == ["economy", "premium_economy", "business"]  # Cached; only budget changed.
     command = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"destination": None})
     asyncio.run(run_turn(session, command, threading.Event(), emit, persist))
     assert session.offers == [] and "destination" in session.messages[-1].text
@@ -246,6 +324,7 @@ def test_workflow_clarifies_without_search_and_preserves_unmentioned_fields(
     async def extract(*args: Any) -> Interpretation:
         return Interpretation(
             changes=[],
+            airports=[],
             preferences=[],
             clarification=None,
             unsupportedTravelers=False,
@@ -285,6 +364,7 @@ def test_more_options_expands_depth_even_after_cache_expires(
     async def more(*args: Any) -> Interpretation:
         return Interpretation(
             changes=[],
+            airports=[],
             preferences=[],
             clarification=None,
             unsupportedTravelers=False,
@@ -302,7 +382,7 @@ def test_more_options_expands_depth_even_after_cache_expires(
             noop,
         )
     )
-    session.selectedOfferId = "depth-3"
+    session.selectedOfferId = "depth-5"
     if not fresh:
         session.searchUpdatedAt = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     monkeypatch.setattr("travel_aid.planning.workflow.interpret", more)
@@ -315,13 +395,16 @@ def test_more_options_expands_depth_even_after_cache_expires(
             noop,
         )
     )
-    assert calls == [("economy", 3), ("economy", 5)]
-    assert session.searchDepth == 5
+    cabins = ["economy", "premium_economy", "business"]
+    assert calls == [(c, 5) for c in cabins] + [(c, 7) for c in cabins]
+    assert session.searchDepth == 7
     if fresh:
-        assert {o.id for o in session.offers} == {"depth-3", "depth-5"}
-        assert session.selectedOfferId == "depth-3"
+        assert {o.id for o in session.offers} == {"depth-5", "depth-7"}
+        assert session.selectedOfferId == "depth-5"
+        # Picks stay put; the new flights are listed beneath them.
+        assert [r.offerId for r in session.recommendations] == ["depth-5"]
     else:
-        assert [o.id for o in session.offers] == ["depth-5"]
+        assert [o.id for o in session.offers] == ["depth-7"]
         assert session.selectedOfferId is None
 
 
@@ -343,6 +426,7 @@ def test_more_options_does_not_expand_a_new_search(
     async def more(*args: Any) -> Interpretation:
         return Interpretation(
             changes=[TripChange(field="departureDate", value="2099-02-11")] if route_change else [],
+            airports=[],
             preferences=[],
             clarification=None,
             unsupportedTravelers=False,
@@ -372,8 +456,8 @@ def test_more_options_does_not_expand_a_new_search(
             noop,
         )
     )
-    assert calls == [("economy", 3)]
-    assert session.searchDepth == 3
+    assert calls == [(c, 5) for c in ("economy", "premium_economy", "business")]
+    assert session.searchDepth == 5
 
 
 class MemoryRepository:
@@ -530,7 +614,7 @@ def test_observability_explains_cabin_decisions_without_fares_or_trip_values(
     monkeypatch.setattr(
         "travel_aid.planning.workflow.search_cabin", lambda *args: [offer("e", 700)]
     )
-    session = Session(trip=trip())
+    session = Session(trip=trip(), preferences=Preferences(cabin="economy"))
     command = TurnRequest(requestId=uuid4(), expectedRevision=0, patch={"travelers": 2})
 
     async def noop(value: Any) -> None:
@@ -540,12 +624,16 @@ def test_observability_explains_cabin_decisions_without_fares_or_trip_values(
         asyncio.run(run_turn(session, command, threading.Event(), noop, noop))
     skipped = [e["properties"] for e in captures if e["event"] == "flight_cabin_skipped"]
     assert {(e["cabin"], e["reason"]) for e in skipped} == {
-        ("premium_economy", "budget_headroom"),
-        ("business", "budget_headroom"),
+        ("premium_economy", "explicit_cabin_preference"),
+        ("business", "explicit_cabin_preference"),
     }
     assert all(e["turn_id"] == str(command.requestId) for e in skipped)
     ranked = [e["properties"] for e in captures if e["event"] == "flight_results_ranked"]
-    assert ranked and all(e["ranking_score"] == 1 for e in ranked)
+    assert [(e["category"], e["pick_count"]) for e in ranked] == [
+        ("budget", 1),
+        ("mid-range", 0),
+        ("luxury", 0),
+    ]
     raw = json.dumps(captures)
     assert "SDQ" not in raw and "JFK" not in raw and "2099" not in raw
     assert "totalUsd" not in raw and "flightBudgetUsd" not in raw

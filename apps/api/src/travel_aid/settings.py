@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     openai_api_key: str = ""
     chat_model: str = "gpt-6-luna"
+    # Flight curation weighs trade-offs, so it reasons more than detail extraction.
+    curation_reasoning_effort: str = "medium"
     database_url: str = ""
     database_url_unpooled: str = ""
     planning_retention_days: int = Field(default=30, ge=1, le=365)

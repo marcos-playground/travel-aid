@@ -9,7 +9,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fli.models import Airport, FlightSearchFilters, FlightSegment, PassengerInfo, TripType
-from fli.models.google_flights.base import FlightResult, MaxStops, SeatType, TimeRestrictions
+from fli.models.google_flights.base import (
+    FlightResult,
+    MaxStops,
+    SeatType,
+    SortBy,
+    TimeRestrictions,
+)
 from fli.search import SearchFlights
 from fli.search._concurrency import TokenBucketRateLimiter
 from fli.search.client import Client
@@ -18,6 +24,8 @@ from travel_aid.observability import current_trace
 from travel_aid.planning.models import Cabin, Journey, Leg, Offer, Preferences, Trip
 
 _limiter = TokenBucketRateLimiter(calls=3, period=1.0)
+# Category policy allows one connection each way unless the user chooses otherwise.
+DEFAULT_MAX_STOPS = 1
 
 
 class SearchStopped(Exception):
@@ -60,6 +68,7 @@ def journey(result: FlightResult) -> Journey:
                 origin=leg.departure_airport.name,
                 destination=leg.arrival_airport.name,
                 airline=leg.airline.value,
+                airlineCode=leg.airline.name.lstrip("_"),
                 flightNumber=leg.flight_number,
                 departsAt=leg.departure_datetime.isoformat(),
                 arrivesAt=leg.arrival_datetime.isoformat(),
@@ -74,7 +83,7 @@ def journey(result: FlightResult) -> Journey:
 def normalize_pair(
     pair: tuple[FlightResult, FlightResult],
     trip: Trip,
-    codes: dict[str, str],
+    codes: dict[str, list[str]],
     booking_url: str,
     retrieved_at: str,
 ) -> Offer | None:
@@ -84,14 +93,17 @@ def normalize_pair(
     price = outbound.price
     if price is None or not math.isfinite(price) or price <= 0 or outbound.currency != "USD":
         return None
+    # Separate tickets leave a missed connection unprotected; never offer them.
+    if outbound.self_transfer or inbound.self_transfer:
+        return None
     for result, origin, destination, day in [
         (outbound, codes["origin"], codes["destination"], trip.departureDate),
         (inbound, codes["destination"], codes["origin"], trip.returnDate),
     ]:
         if (
             not result.legs
-            or result.legs[0].departure_airport.name != origin
-            or result.legs[-1].arrival_airport.name != destination
+            or result.legs[0].departure_airport.name not in origin
+            or result.legs[-1].arrival_airport.name not in destination
             or result.legs[0].departure_datetime.date().isoformat() != day
         ):
             return None
@@ -116,12 +128,12 @@ def normalize_pair(
 
 def search_cabin(
     trip: Trip,
-    codes: dict[str, str],
+    codes: dict[str, list[str]],
     preferences: Preferences,
     cabin: Cabin,
     stop: threading.Event,
     deadline: float,
-    top_n: int = 3,
+    top_n: int = 5,
 ) -> list[Offer]:
     client = CancellableClient(stop, deadline)
     client.check()
@@ -132,32 +144,37 @@ def search_cabin(
         if preferences.earliestDepartureHour is not None
         else None
     )
-    filters = FlightSearchFilters(
-        trip_type=TripType.ROUND_TRIP,
-        passenger_info=passengers,
-        seat_type=seat,
-        stops=MaxStops(preferences.maxStops + 1)
-        if preferences.maxStops is not None
-        else MaxStops.ANY,
-        flight_segments=[
-            FlightSegment(
-                departure_airport=[[Airport[start], 0]],
-                arrival_airport=[[Airport[end], 0]],
-                travel_date=day,
-                time_restrictions=restrictions,
-            )
-            for start, end, day in [
-                (codes["origin"], codes["destination"], trip.departureDate),
-                (codes["destination"], codes["origin"], trip.returnDate),
-            ]
-        ],
-    )
+    max_stops = DEFAULT_MAX_STOPS if preferences.maxStops is None else preferences.maxStops
+    # Economy also feeds Budget, so fetch the cheapest rows as well as Google's best rows.
+    sorts = [SortBy.CHEAPEST, SortBy.BEST] if cabin == "economy" else [SortBy.BEST]
     search = SearchFlights()
     search.client = client
-    results = search.search(filters, top_n=top_n, currency="USD", language="en-US", country="US")
+    results: list[Any] = []
+    for sort in sorts:
+        filters = FlightSearchFilters(
+            trip_type=TripType.ROUND_TRIP,
+            passenger_info=passengers,
+            seat_type=seat,
+            stops=MaxStops(max_stops + 1),
+            sort_by=sort,
+            flight_segments=[
+                FlightSegment(
+                    departure_airport=[[Airport[code], 0] for code in start],
+                    arrival_airport=[[Airport[code], 0] for code in end],
+                    travel_date=day,
+                    time_restrictions=restrictions,
+                )
+                for start, end, day in [
+                    (codes["origin"], codes["destination"], trip.departureDate),
+                    (codes["destination"], codes["origin"], trip.returnDate),
+                ]
+            ],
+        )
+        found = search.search(filters, top_n=top_n, currency="USD", language="en-US", country="US")
+        results.extend(found or [])
     now = datetime.now(UTC).isoformat()
-    offers: list[Offer] = []
-    for pair in results or []:
+    offers: dict[str, Offer] = {}
+    for pair in results:
         client.check()
         if not isinstance(pair, tuple) or len(pair) != 2:
             continue
@@ -171,7 +188,7 @@ def search_cabin(
         )
         offer = normalize_pair(pair, trip, codes, link, now)
         if offer:
-            offers.append(offer)
+            offers.setdefault(offer.id, offer)
     trace = current_trace()
     if trace:
         trace.event(
@@ -179,6 +196,6 @@ def search_cabin(
             cabin=cabin,
             request_count=client.request_count,
             offer_count=len(offers),
-            filtered_count=len(results or []) - len(offers),
+            filtered_count=len(results) - len(offers),
         )
-    return offers
+    return list(offers.values())
