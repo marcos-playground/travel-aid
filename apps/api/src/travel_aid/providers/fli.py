@@ -126,6 +126,13 @@ def normalize_pair(
     )
 
 
+def itinerary(offer: Offer) -> str:
+    """Identity without the fare: the same flights repriced are still one option."""
+    return json.dumps(
+        [offer.outbound.model_dump(), offer.inbound.model_dump(), offer.travelers], sort_keys=True
+    )
+
+
 def search_cabin(
     trip: Trip,
     codes: dict[str, list[str]],
@@ -170,9 +177,18 @@ def search_cabin(
                 ]
             ],
         )
-        found = search.search(filters, top_n=top_n, currency="USD", language="en-US", country="US")
+        try:
+            found = search.search(
+                filters, top_n=top_n, currency="USD", language="en-US", country="US"
+            )
+        except Exception:
+            # The deadline covers every cabin, so keep the rows an earlier sort already returned.
+            if not results or stop.is_set():
+                raise
+            break
         results.extend(found or [])
     now = datetime.now(UTC).isoformat()
+    # Two sorts can return one itinerary at two prices; the fare is not part of its identity.
     offers: dict[str, Offer] = {}
     for pair in results:
         client.check()
@@ -188,7 +204,10 @@ def search_cabin(
         )
         offer = normalize_pair(pair, trip, codes, link, now)
         if offer:
-            offers.setdefault(offer.id, offer)
+            key = itinerary(offer)
+            cheapest = offers.get(key)
+            if cheapest is None or offer.totalUsd < cheapest.totalUsd:
+                offers[key] = offer
     trace = current_trace()
     if trace:
         trace.event(

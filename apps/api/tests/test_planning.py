@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from fli.models import Airline, Airport
 from fli.models.google_flights.base import FlightLeg, FlightResult, SeatType
+from fli.search import SearchFlights
 from pydantic import ValidationError
 from starlette.types import Message
 
@@ -30,7 +31,12 @@ from travel_aid.planning.models import (
 )
 from travel_aid.planning.validation import accept_airports, resolve_airport, search_details
 from travel_aid.planning.workflow import run_turn
-from travel_aid.providers.fli import CancellableClient, SearchStopped, normalize_pair
+from travel_aid.providers.fli import (
+    CancellableClient,
+    SearchStopped,
+    normalize_pair,
+    search_cabin,
+)
 from travel_aid.recommendations.flights import (
     budget_picks,
     luxury_picks,
@@ -183,6 +189,8 @@ def test_mid_range_rules_and_ceiling() -> None:
     pool = mid_range_pool(offers, Preferences(), set())
     assert [o.id for o in pool] == ["good"]  # 1000 is above 1.6 × 600.
     assert [o.id for o in mid_range_picks(pool, ["unknown", "good"])] == ["good"]
+    # A reply naming nothing we hold falls back to the rules instead of emptying the category.
+    assert [o.id for o in mid_range_picks(pool, ["unknown"])] == ["good"]
     assert mid_range_pool(offers, Preferences(), {"good"}) == []
     # The user's own earliest hour overrides the 7 AM rule.
     assert "early" in {
@@ -247,6 +255,72 @@ def test_normalization_never_sums_return_or_multiplies_by_adults() -> None:
     assert normalize_pair((outbound, inbound), *args) is None
     outbound.currency, inbound.self_transfer = "USD", True
     assert normalize_pair((outbound, inbound), *args) is None
+
+
+def test_economy_search_keeps_earlier_rows_and_one_fare_per_itinerary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def pair(price: float) -> tuple[FlightResult, FlightResult]:
+        def result(origin: str, destination: str, day: str) -> FlightResult:
+            return FlightResult(
+                legs=[
+                    FlightLeg(
+                        airline=Airline.AA,
+                        flight_number="123",
+                        departure_airport=Airport[origin],
+                        arrival_airport=Airport[destination],
+                        departure_datetime=datetime.fromisoformat(f"{day}T10:00:00"),
+                        arrival_datetime=datetime.fromisoformat(f"{day}T14:00:00"),
+                        duration=240,
+                        cabin=SeatType.ECONOMY,
+                    )
+                ],
+                duration=240,
+                stops=0,
+                price=price,
+                currency="USD",
+            )
+
+        return result("SDQ", "JFK", "2099-02-10"), result("JFK", "SDQ", "2099-02-15")
+
+    def run() -> list[Offer]:
+        return search_cabin(
+            trip(),
+            {"origin": ["SDQ"], "destination": ["JFK"]},
+            Preferences(),
+            "economy",
+            threading.Event(),
+            float("inf"),
+        )
+
+    monkeypatch.setattr(SearchFlights, "build_flight_booking_url", lambda *a, **k: "https://e.test")
+    done: list[Any] = []
+
+    def repriced(self: Any, filters: Any, **kwargs: Any) -> list[Any]:
+        done.append(filters.sort_by)
+        return [pair(900)] if len(done) == 1 else [pair(700)]
+
+    monkeypatch.setattr(SearchFlights, "search", repriced)
+    # The cheapest and best sorts can return one itinerary twice; only the lower fare survives.
+    assert [o.totalUsd for o in run()] == [700]
+
+    def fails_late(self: Any, filters: Any, **kwargs: Any) -> list[Any]:
+        done.append(filters.sort_by)
+        if len(done) == 1:
+            return [pair(800)]
+        raise SearchStopped("Flight search stopped.")
+
+    done.clear()
+    monkeypatch.setattr(SearchFlights, "search", fails_late)
+    # Running out of time on the second sort must not discard the first sort's results.
+    assert [o.totalUsd for o in run()] == [800]
+    def fails_first(self: Any, filters: Any, **kwargs: Any) -> list[Any]:
+        raise SearchStopped("Flight search stopped.")
+
+    monkeypatch.setattr(SearchFlights, "search", fails_first)
+    # With nothing to keep, the failure still reaches the caller.
+    with pytest.raises(SearchStopped):
+        run()
 
 
 def test_cancelled_transport_makes_no_request() -> None:

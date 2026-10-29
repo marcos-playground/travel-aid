@@ -177,7 +177,9 @@ def mid_range_picks(pool: list[Offer], chosen_ids: list[str] | None) -> list[Off
     if chosen_ids is None:
         return pick_distinct(pool)
     by_id = {offer.id: offer for offer in pool}
-    return pick_distinct(by_id[offer_id] for offer_id in chosen_ids if offer_id in by_id)
+    picks = pick_distinct(by_id[offer_id] for offer_id in chosen_ids if offer_id in by_id)
+    # A reply naming no offer we hold is as unusable as no reply: fall back to the rules.
+    return picks or pick_distinct(pool)
 
 
 def luxury_picks(

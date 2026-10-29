@@ -368,7 +368,10 @@ async def run_turn(
                     picks = mid_range_picks(pool, list(chosen) if chosen else None)
                     session.recommendations += add("mid-range", picks, chosen)
                     used |= {o.id for o in picks}
-                    trace_picks("mid-range", picks, session.offers, "model" if chosen else "rules")
+                    by_model = chosen is not None and any(o.id in chosen for o in picks)
+                    trace_picks(
+                        "mid-range", picks, session.offers, "model" if by_model else "rules"
+                    )
                     await event("flights.ready")
                     if remaining:
                         failed = not await remaining
