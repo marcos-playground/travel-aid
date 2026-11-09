@@ -314,6 +314,7 @@ def test_economy_search_keeps_earlier_rows_and_one_fare_per_itinerary(
     monkeypatch.setattr(SearchFlights, "search", fails_late)
     # Running out of time on the second sort must not discard the first sort's results.
     assert [o.totalUsd for o in run()] == [800]
+
     def fails_first(self: Any, filters: Any, **kwargs: Any) -> list[Any]:
         raise SearchStopped("Flight search stopped.")
 

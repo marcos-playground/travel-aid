@@ -53,7 +53,14 @@ separate sample flights-and-hotels screen.
 
 ## Development
 
-Run the backend and frontend in separate terminals:
+Run the backend and frontend together from the repository root:
+
+```bash
+pnpm dev
+```
+
+Both servers share the terminal; press Ctrl+C to stop them.
+You can also run either server individually:
 
 ```bash
 pnpm dev:api   # FastAPI on http://127.0.0.1:8000 (docs at /docs)
