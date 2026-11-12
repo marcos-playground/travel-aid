@@ -18,22 +18,50 @@ from pydantic import ValidationError
 
 from travel_aid.observability import JourneyTrace, current_trace
 from travel_aid.planning.chat import PROMPT_VERSION, interpret
+from travel_aid.planning.curation import curate
 from travel_aid.planning.models import (
     Cabin,
+    Category,
     ChatMessage,
     Interpretation,
+    Offer,
     PlanningEvent,
     Preferences,
+    Recommendation,
     Session,
     Trip,
     TurnRequest,
 )
-from travel_aid.planning.validation import search_details, validate_trip
+from travel_aid.planning.validation import (
+    accept_airports,
+    normalize,
+    search_details,
+    validate_trip,
+)
 from travel_aid.providers.fli import search_cabin
-from travel_aid.recommendations.flights import POLICY_VERSION, rank, should_search, suitable
+from travel_aid.recommendations.flights import (
+    POLICY_VERSION,
+    budget_picks,
+    default_reason,
+    luxury_picks,
+    mid_range_picks,
+    mid_range_pool,
+    recommendation,
+    refresh_budget,
+    should_search,
+    suitable,
+    trace_picks,
+    upgrade_note,
+)
 from travel_aid.settings import get_settings
 
 logger = logging.getLogger(__name__)
+EMPTY_CATEGORY: dict[Category, str] = {
+    "budget": "No flights met the Budget rules (layovers up to 10 hours).",
+    "mid-range": "No other flights met the Mid-range rules (economy with a carry-on likely "
+    "included, first flights from 7 AM, and within 1.6× of the cheapest such flight).",
+    "luxury": "No other flights met the Luxury rules (layovers up to 4 hours).",
+}
 Emit = Callable[[PlanningEvent], Awaitable[None]]
 Persist = Callable[[Session], Awaitable[None]]
 
@@ -42,7 +70,7 @@ class GraphState(TypedDict):
     session: Session
     interpretation: Interpretation
     question: str | None
-    codes: dict[str, str]
+    codes: dict[str, list[str]]
 
 
 async def run_turn(
@@ -62,6 +90,7 @@ async def run_turn(
         else:
             result = Interpretation(
                 changes=[],
+                airports=[],
                 preferences=[],
                 clarification=None,
                 unsupportedTravelers=False,
@@ -104,7 +133,13 @@ async def run_turn(
             return {"question": " ".join(errors), "codes": {}}
         session.trip = trip
         session.preferences = preferences
-        codes, missing = search_details(trip, local_time.date())
+        for proposal in result.airports:
+            place = getattr(trip, proposal.field)
+            accepted = accept_airports(place, proposal.codes) if place else []
+            if accepted:
+                session.placeAirports[normalize(place)] = accepted
+        session.placeAirports = dict(list(session.placeAirports.items())[-20:])
+        codes, missing = search_details(trip, local_time.date(), session.placeAirports)
         if missing:
             trace.event(
                 "planning_resolution_incomplete",
@@ -140,13 +175,15 @@ async def run_turn(
             session.searchedCabins = []
             session.searchUpdatedAt = None
             session.searchKey = key
-            session.searchDepth = 3
+            session.searchDepth = 5
         if result.moreOptions and session.searchDepth >= 10:
             result.clarification = (
                 "I've shown the current set of alternatives. "
                 "Try different dates or preferences to explore other flights."
             )
-        session.recommendations = rank(session.offers, trip.flightBudgetUsd, preferences)
+        session.recommendations = refresh_budget(
+            session.recommendations, session.offers, trip.flightBudgetUsd
+        )
         trace.event(
             "planning_details_ready"
             if not missing and not result.clarification
@@ -190,6 +227,21 @@ async def run_turn(
                 session.recommendations = []
                 session.selectedOfferId = None
                 session.searchedCabins = []
+            # Picks the clearing above left standing stay; new flights land beneath them.
+            keep = bool(session.recommendations)
+            codes = state["codes"]
+            if not keep and any(
+                (getattr(session.trip, field) or "").strip().upper() != " ".join(codes[field])
+                for field in ("origin", "destination")
+            ):
+                session.messages.append(
+                    ChatMessage(
+                        id=str(uuid4()),
+                        role="assistant",
+                        text=f"Searching {', '.join(codes['origin'])} → "
+                        f"{', '.join(codes['destination'])}.",
+                    )
+                )
             session.status = "searching"
             await event("search.started")
             trace.event(
@@ -198,68 +250,140 @@ async def run_turn(
                 has_flight_budget=session.trip.flightBudgetUsd is not None,
             )
             deadline = time.monotonic() + settings.flight_search_timeout_seconds
-            failed = False
-            for cabin in ("economy", "premium_economy", "business"):
-                typed_cabin: Cabin = cabin
-                if typed_cabin in session.searchedCabins:
-                    trace.event("flight_cabin_skipped", cabin=cabin, reason="cached_cabin")
-                    continue
-                if not should_search(
-                    typed_cabin, session.offers, session.trip.flightBudgetUsd, session.preferences
-                ):
-                    trace.event(
-                        "flight_cabin_skipped",
-                        cabin=cabin,
-                        policy_version=POLICY_VERSION,
-                        budget_ratio=round(
-                            session.trip.flightBudgetUsd / min(o.totalUsd for o in session.offers),
-                            3,
+
+            async def search(cabins: list[Cabin]) -> bool:
+                """Search cabins in order; False when the provider failed."""
+                for cabin in cabins:
+                    if cabin in session.searchedCabins:
+                        trace.event("flight_cabin_skipped", cabin=cabin, reason="cached_cabin")
+                        continue
+                    if not should_search(cabin, session.preferences):
+                        trace.event(
+                            "flight_cabin_skipped",
+                            cabin=cabin,
+                            policy_version=POLICY_VERSION,
+                            reason="explicit_cabin_preference",
                         )
-                        if session.trip.flightBudgetUsd and session.offers
-                        else None,
-                        reason="explicit_cabin_preference"
-                        if session.preferences.cabin
-                        else "budget_headroom"
-                        if session.offers
-                        else "no_economy_baseline",
+                        continue
+                    if stop.is_set():
+                        raise asyncio.CancelledError
+                    try:
+                        with trace.span("flight_cabin_search", cabin=cabin):
+                            offers = await asyncio.to_thread(
+                                search_cabin,
+                                session.trip,
+                                codes,
+                                session.preferences,
+                                cabin,
+                                stop,
+                                deadline,
+                                session.searchDepth,
+                            )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as error:
+                        logger.warning("Flight provider failed for cabin %s", cabin)
+                        trace.error("flight_provider_failed", error)
+                        trace.event("flight_search_failed", cabin=cabin)
+                        return False
+                    session.searchedCabins.append(cabin)
+                    session.offers = list(
+                        {
+                            o.id: o
+                            for o in session.offers + offers
+                            if suitable(o, session.preferences)
+                        }.values()
                     )
-                    continue
-                if stop.is_set():
-                    raise asyncio.CancelledError
+                    session.searchUpdatedAt = datetime.now(UTC).isoformat()
+                return True
+
+            async def reasons(
+                category: Category, offers: list[Offer], *, choose: bool = False
+            ) -> dict[str, str] | None:
+                """Model reasons by offer id, in the model's order; None when unavailable."""
+                if not offers:
+                    return {}
+                context = {
+                    "category": category,
+                    "flightBudgetUsd": session.trip.flightBudgetUsd,
+                    "budgetPickPricesUsd": [
+                        o.totalUsd
+                        for o in session.offers
+                        for r in session.recommendations
+                        if r.category == "budget" and r.offerId == o.id
+                    ],
+                }
                 try:
-                    with trace.span("flight_cabin_search", cabin=cabin):
-                        offers = await asyncio.to_thread(
-                            search_cabin,
-                            session.trip,
-                            state["codes"],
-                            session.preferences,
-                            typed_cabin,
-                            stop,
-                            deadline,
-                            session.searchDepth,
-                        )
+                    with trace.span("flight_curation", category=category):
+                        picks = await curate(category, offers, choose=choose, context=context)
                 except asyncio.CancelledError:
                     raise
                 except Exception as error:
-                    logger.warning("Flight provider failed for cabin %s", cabin)
-                    trace.error("flight_provider_failed", error)
-                    trace.event("flight_search_failed", cabin=cabin)
-                    failed = True
-                    break
-                session.searchedCabins.append(typed_cabin)
-                session.offers = list(
-                    {
-                        o.id: o for o in session.offers + offers if suitable(o, session.preferences)
-                    }.values()
-                )
-                session.searchUpdatedAt = datetime.now(UTC).isoformat()
-                session.recommendations = rank(
-                    session.offers, session.trip.flightBudgetUsd, session.preferences
-                )
-                await event("flights.ready")
-            session.recommendations = rank(
-                session.offers, session.trip.flightBudgetUsd, session.preferences
-            )
+                    logger.warning("Flight curation failed for %s", category)
+                    trace.error("flight_curation_failed", error)
+                    return None
+                return {pick.offerId: pick.reason.strip()[:300] for pick in picks} or None
+
+            def add(
+                category: Category,
+                picks: list[Offer],
+                written: dict[str, str] | None,
+                **notes: object,
+            ) -> list[Recommendation]:
+                return [
+                    recommendation(
+                        category,
+                        offer,
+                        (written or {}).get(offer.id) or default_reason(category, offer),
+                        session.trip.flightBudgetUsd,
+                        carry_on=category == "mid-range",
+                        note=upgrade_note(session.offers, offer) if notes.get("economy") else None,
+                    )
+                    for offer in picks
+                ]
+
+            # Budget and Mid-range need only the first cabin; the others search meanwhile.
+            primary: Cabin = session.preferences.cabin or "economy"
+            failed = not await search([primary])
+            others: list[Cabin] = [c for c in ("premium_economy", "business") if c != primary]
+            remaining = asyncio.create_task(search(others)) if not failed else None
+            try:
+                if keep:
+                    if remaining:
+                        failed = not await remaining
+                    session.recommendations = refresh_budget(
+                        session.recommendations, session.offers, session.trip.flightBudgetUsd
+                    )
+                    await event("flights.ready")
+                else:
+                    session.recommendations = []
+                    used: set[str] = set()
+                    picks = budget_picks(session.offers, session.preferences, used)
+                    session.recommendations += add("budget", picks, await reasons("budget", picks))
+                    used |= {o.id for o in picks}
+                    trace_picks("budget", picks, session.offers, "rules")
+                    await event("flights.ready")
+                    pool = mid_range_pool(session.offers, session.preferences, used)
+                    chosen = await reasons("mid-range", pool, choose=True)
+                    picks = mid_range_picks(pool, list(chosen) if chosen else None)
+                    session.recommendations += add("mid-range", picks, chosen)
+                    used |= {o.id for o in picks}
+                    by_model = chosen is not None and any(o.id in chosen for o in picks)
+                    trace_picks(
+                        "mid-range", picks, session.offers, "model" if by_model else "rules"
+                    )
+                    await event("flights.ready")
+                    if remaining:
+                        failed = not await remaining
+                    picks, economy = luxury_picks(session.offers, session.preferences, used)
+                    session.recommendations += add(
+                        "luxury", picks, await reasons("luxury", picks), economy=economy
+                    )
+                    trace_picks("luxury", picks, session.offers, "rules")
+                    await event("flights.ready")
+            finally:
+                if remaining and not remaining.done():
+                    remaining.cancel()
             trace.event(
                 "flight_search_completed",
                 outcome="partial"
@@ -270,13 +394,19 @@ async def run_turn(
                 if session.offers
                 else "empty",
                 offer_count=len(session.offers),
-                category_count=len(session.recommendations),
+                category_count=len({r.category for r in session.recommendations}),
             )
             if session.recommendations:
                 question = (
                     "Here are round-trip options for all adults. Compare the categories below, "
                     "or tell me your preferences to refine them. Prices can change before booking."
                 )
+                shown = {r.category for r in session.recommendations}
+                missing_categories = [
+                    EMPTY_CATEGORY[c] for c in ("budget", "mid-range", "luxury") if c not in shown
+                ]
+                if missing_categories and not failed:
+                    question += " " + " ".join(missing_categories)
                 if failed:
                     question += " I couldn't finish every search; you can retry for more options."
             elif failed:
@@ -319,6 +449,7 @@ async def run_turn(
                 "question": None,
                 "interpretation": Interpretation(
                     changes=[],
+                    airports=[],
                     preferences=[],
                     clarification=None,
                     unsupportedTravelers=False,

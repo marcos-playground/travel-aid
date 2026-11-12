@@ -106,7 +106,7 @@ export function useFlightPlanner() {
           if (event.type === "flights.ready" && viewedTurn !== requestId) {
             viewedTurn = requestId;
             track("planner_results_viewed", { turn_id: requestId, $ai_trace_id: requestId,
-              offer_count: event.session.offers.length, category_count: event.session.recommendations.length });
+              offer_count: event.session.offers.length, category_count: new Set(event.session.recommendations.map((r) => r.category)).size });
           }
           if (event.type === "turn.failed") {
             failed = true;

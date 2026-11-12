@@ -80,6 +80,8 @@ META = {
     "http_status",
     "earliest_hour_rule",
     "ranking_score",
+    "pick_count",
+    "source",
     "duration_minutes",
     "stops",
     "relative_price",

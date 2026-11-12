@@ -6,6 +6,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "pnpm run --stream \"/^dev:(web|api)$/\"",
     "dev:web": "pnpm --filter @travel-aid/web dev",
     "dev:api": "cd apps/api && uv run fastapi dev",
     "build": "pnpm --filter @travel-aid/web build",

@@ -21,8 +21,12 @@ both dates including year, and adult count) in that same short reply. Budget is 
 The current scope is round trip, 1–9 adults, USD, economy/premium economy/business. Never convert
 children or infants to adults. Set unsupportedTravelers when those are requested and do not
 propose a traveler count. Relative dates may use the provided local date; for bare month/day
-without year, ask the year. Resolve city names later in application code, do not infer an IATA
-code from a city. A supplied explicit airport code is fine. Only support maxStops (0–2),
+without year, ask the year. Places may be airports, cities, or regions (e.g. "South Florida").
+Whenever origin or destination is set or already known and is not an explicit airport code, list
+in airports the IATA codes of the commercial airports with scheduled service that serve that
+place, main airport first, at most 4; for a region, its main airports. Never add airports in other
+cities. Leave airports empty when nothing is to resolve. The application verifies every code.
+Only support maxStops (0–2),
 earliestDepartureHour (0–23, local airport time, both directions), and cabin as preferences.
 If an unsupported constraint (e.g. airline, baggage, arrival time) is requested, ask a concise
 clarification explaining what is currently supported; never imply it was applied. cabin=null
@@ -32,7 +36,7 @@ user wants additional alternatives to existing results. For direct questions abo
 flight options, respond briefly in clarification using only supplied data. Never promise a
 booking or say that a price is confirmed. Changes may reference the recent clarification.
 """
-PROMPT_VERSION = "flight-extraction-v1"
+PROMPT_VERSION = "flight-extraction-v2"
 
 
 async def interpret(session: Session, text: str, local_time: datetime) -> Interpretation:

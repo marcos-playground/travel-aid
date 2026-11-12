@@ -224,6 +224,11 @@
             "type": "string",
             "title": "Airline"
           },
+          "airlineCode": {
+            "type": "string",
+            "title": "Airlinecode",
+            "default": ""
+          },
           "flightNumber": {
             "type": "string",
             "title": "Flightnumber"
@@ -251,6 +256,7 @@
           "origin",
           "destination",
           "airline",
+          "airlineCode",
           "flightNumber",
           "departsAt",
           "arrivesAt",
@@ -425,6 +431,29 @@
           "overBudgetPercent": {
             "type": "number",
             "title": "Overbudgetpercent"
+          },
+          "carryOn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "likely"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carryon"
+          },
+          "upgradeNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upgradenote"
           }
         },
         "additionalProperties": false,
@@ -434,7 +463,9 @@
           "offerId",
           "rationale",
           "overBudgetUsd",
-          "overBudgetPercent"
+          "overBudgetPercent",
+          "carryOn",
+          "upgradeNote"
         ],
         "title": "Recommendation"
       },
@@ -507,6 +538,16 @@
             ],
             "title": "Selectedofferid"
           },
+          "placeAirports": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Placeairports"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -559,7 +600,7 @@
             "maximum": 10.0,
             "minimum": 1.0,
             "title": "Searchdepth",
-            "default": 3
+            "default": 5
           },
           "lastRequestId": {
             "anyOf": [
@@ -588,6 +629,7 @@
           "offers",
           "recommendations",
           "selectedOfferId",
+          "placeAirports",
           "status",
           "searchKey",
           "searchedCabins",
